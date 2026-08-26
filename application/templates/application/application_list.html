@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Applications</title>
+</head>
+<body>
+
+    <h1>My Job Applications</h1>
+
+    {% for job in applications %}
+
+        <h2>{{ job.company }}</h2>
+
+        <p>Job Title: {{ job.job_title }}</p>
+
+        <p>Location: {{ job.location }}</p>
+
+        <p>Status: {{ job.get_status_display }}</p>
+
+        <hr>
+
+    {% empty %}
+
+        <p>No job applications found.</p>
+
+    {% endfor %}
+
+</body>
+</html>
