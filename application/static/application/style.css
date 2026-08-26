@@ -30,3 +30,17 @@ h1 {
 .status {
     font-weight: bold;
 }
+.add-button {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 10px 16px;
+    background: #222;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+.add-button:hover {
+    opacity: 0.85;
+}
