@@ -1,29 +1,47 @@
+{% load static %}
+
 <!DOCTYPE html>
 <html>
 <head>
     <title>Job Applications</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
 </head>
+
 <body>
+
+<div class="container">
 
     <h1>My Job Applications</h1>
 
     {% for job in applications %}
 
-        <h2>{{ job.company }}</h2>
+        <div class="job-card">
 
-        <p>Job Title: {{ job.job_title }}</p>
+            <h2>{{ job.company }}</h2>
 
-        <p>Location: {{ job.location }}</p>
+            <p>
+                <strong>Job Title:</strong>
+                {{ job.job_title }}
+            </p>
 
-        <p>Status: {{ job.get_status_display }}</p>
+            <p>
+                <strong>Location:</strong>
+                {{ job.location }}
+            </p>
 
-        <hr>
+            <p class="status">
+                Status: {{ job.get_status_display }}
+            </p>
+
+        </div>
 
     {% empty %}
 
         <p>No job applications found.</p>
 
     {% endfor %}
+
+</div>
 
 </body>
 </html>
