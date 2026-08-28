@@ -123,3 +123,55 @@ h1 {
 .form-card input[type="date"] {
     font-size: 16px;
 }
+.edit-link {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 8px 14px;
+    background: #f1f3f5;
+    color: #222;
+    text-decoration: none;
+    border-radius: 7px;
+    font-weight: bold;
+}
+
+.edit-link:hover {
+    background: #e2e5e9;
+    text-decoration: none;
+}
+.container {
+    max-width: 1050px;
+    margin: 30px auto;
+}
+
+.job-card {
+    padding: 20px 24px;
+    margin-bottom: 16px;
+}
+
+.job-card h2 {
+    font-size: 24px;
+    margin-bottom: 14px;
+}
+
+.job-card p {
+    font-size: 16px;
+    margin: 8px 0;
+}
+.application-list-container {
+    max-width: 900px;
+}
+
+.application-list-container .job-card {
+    padding: 16px 20px;
+    margin-bottom: 12px;
+}
+
+.application-list-container .job-card h2 {
+    font-size: 22px;
+    margin: 0 0 10px;
+}
+
+.application-list-container .job-card p {
+    font-size: 15px;
+    margin: 5px 0;
+}
