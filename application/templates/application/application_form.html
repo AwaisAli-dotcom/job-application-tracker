@@ -1,19 +1,26 @@
+{% load static %}
 <!DOCTYPE html>
 <html>
 <head>
     <title>Add Application</title>
+<link rel="stylesheet" href="{% static 'application/style.css' %}">    
 </head>
 <body>
 
+<div class="container">
     <h1>Add Job Application</h1>
+    <a class="back-link" href="{% url 'application_list' %}">
+    ← Back to Applications
+</a>
 
-    <form method="POST">
+    <form method="POST" class="form-card">
         {% csrf_token %}
 
         {{ form.as_p }}
 
         <button type="submit">Save Application</button>
     </form>
+</div>
 
 </body>
 </html>

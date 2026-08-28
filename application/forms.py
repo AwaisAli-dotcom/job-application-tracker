@@ -17,3 +17,6 @@ class JobApplicationForm(forms.ModelForm):
             'application_date',
             'notes',
         ]
+        widgets = {
+    'application_date': forms.DateInput(attrs={'type': 'date'}),
+}
