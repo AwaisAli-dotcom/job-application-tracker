@@ -20,6 +20,23 @@
 <a class="add-button" href="{% url 'application_create' %}">
     + Add Application
 </a>
+
+    <form method="GET" class="filter-form">
+        <input type="search" name="search" value="{{ search }}" placeholder="Search applications...">
+
+        <select name="status">
+            <option value="">All statuses</option>
+            {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
+                    {{ label }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">Search</button>
+        <a href="{% url 'application_list' %}">Clear</a>
+    </form>
+
     {% for job in applications %}
 
         <div class="job-card">
@@ -49,7 +66,11 @@
 
     {% empty %}
 
-        <p>No job applications found.</p>
+        {% if has_applications %}
+            <p>No applications match your search.</p>
+        {% else %}
+            <p>No job applications found.</p>
+        {% endif %}
 
     {% endfor %}
 

@@ -265,3 +265,39 @@ h1 {
 .logout-form button:hover {
     background: #e2e5e9;
 }
+
+.filter-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.filter-form input,
+.filter-form select {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.filter-form input {
+    flex: 1;
+    min-width: 220px;
+}
+
+.filter-form button,
+.filter-form a {
+    padding: 10px 16px;
+    background: #222;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.filter-form a {
+    background: #f1f3f5;
+    color: #222;
+}

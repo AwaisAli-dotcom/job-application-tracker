@@ -258,3 +258,133 @@ class JobApplicationDetailTests(TestCase):
         response = self.client.get(reverse('application_detail', args=[99999]))
 
         self.assertEqual(response.status_code, 404)
+
+
+class JobApplicationSearchFilterTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='searchuser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='othersearchuser',
+            password='testpass123'
+        )
+        self.google = JobApplication.objects.create(
+            user=self.user,
+            company='Google',
+            job_title='Software Engineer',
+            location='London',
+            status='applied'
+        )
+        self.amazon = JobApplication.objects.create(
+            user=self.user,
+            company='Amazon',
+            job_title='Backend Developer',
+            location='Manchester',
+            status='interview'
+        )
+        self.remote_saved = JobApplication.objects.create(
+            user=self.user,
+            company='Remote Works',
+            job_title='Product Analyst',
+            location='Remote',
+            status='saved'
+        )
+        self.hidden = JobApplication.objects.create(
+            user=self.other_user,
+            company='Hidden Google',
+            job_title='Developer Advocate',
+            location='Remote',
+            status='interview'
+        )
+
+    def test_search_by_company(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'), {'search': 'Google'})
+
+        self.assertContains(response, self.google.company)
+        self.assertNotContains(response, self.amazon.company)
+
+    def test_search_by_job_title(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'search': 'Developer'}
+        )
+
+        self.assertContains(response, self.amazon.company)
+        self.assertNotContains(response, self.google.company)
+
+    def test_search_by_location(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'), {'search': 'Remote'})
+
+        self.assertContains(response, self.remote_saved.company)
+        self.assertNotContains(response, self.google.company)
+
+    def test_search_is_case_insensitive(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'), {'search': 'google'})
+
+        self.assertContains(response, self.google.company)
+
+    def test_filter_by_status(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'status': 'interview'}
+        )
+
+        self.assertContains(response, self.amazon.company)
+        self.assertNotContains(response, self.google.company)
+
+    def test_search_and_status_filter_work_together(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'search': 'developer', 'status': 'interview'}
+        )
+
+        self.assertContains(response, self.amazon.company)
+        self.assertNotContains(response, self.google.company)
+        self.assertNotContains(response, self.remote_saved.company)
+
+    def test_no_query_shows_all_current_users_applications(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'))
+
+        self.assertContains(response, self.google.company)
+        self.assertContains(response, self.amazon.company)
+        self.assertContains(response, self.remote_saved.company)
+        self.assertNotContains(response, self.hidden.company)
+
+    def test_search_never_exposes_another_users_applications(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'), {'search': 'Hidden'})
+
+        self.assertNotContains(response, self.hidden.company)
+        self.assertContains(response, 'No applications match your search.')
+
+    def test_no_matching_results_show_search_empty_message(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'), {'search': 'Nothing'})
+
+        self.assertContains(response, 'No applications match your search.')
+        self.assertNotContains(response, 'No job applications found.')
+
+    def test_anonymous_user_is_redirected_to_login_for_search(self):
+        response = self.client.get(reverse('application_list'), {'search': 'Google'})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response['Location'])

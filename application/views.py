@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
+from django.db.models import Q
 from django.views.decorators.http import require_http_methods
 
 from .models import JobApplication
@@ -34,11 +35,31 @@ def register(request):
 @login_required
 def application_list(request):
     applications = JobApplication.objects.filter(user=request.user)
+    has_applications = applications.exists()
+    search = request.GET.get('search', '').strip()
+    selected_status = request.GET.get('status', '').strip()
+    valid_statuses = [value for value, label in JobApplication.STATUS_CHOICES]
+
+    if search:
+        applications = applications.filter(
+            Q(company__icontains=search) |
+            Q(job_title__icontains=search) |
+            Q(location__icontains=search)
+        )
+
+    if selected_status in valid_statuses:
+        applications = applications.filter(status=selected_status)
 
     return render(
         request,
         'application/application_list.html',
-        {'applications': applications}
+        {
+            'applications': applications,
+            'has_applications': has_applications,
+            'search': search,
+            'selected_status': selected_status,
+            'status_choices': JobApplication.STATUS_CHOICES,
+        }
     )
 
 
