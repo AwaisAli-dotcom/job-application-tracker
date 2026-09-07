@@ -301,3 +301,29 @@ h1 {
     background: #f1f3f5;
     color: #222;
 }
+
+.pagination {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    margin-top: 24px;
+}
+
+.pagination a {
+    padding: 8px 14px;
+    background: #f1f3f5;
+    color: #222;
+    border-radius: 7px;
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.pagination a:hover {
+    background: #e2e5e9;
+}
+
+.pagination span {
+    font-weight: bold;
+}

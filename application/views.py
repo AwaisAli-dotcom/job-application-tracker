@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.views.decorators.http import require_http_methods
 
@@ -71,13 +72,21 @@ def application_list(request):
         applications = applications.filter(status=selected_status)
 
     applications = applications.order_by(sort_options[selected_sort])
+    paginator = Paginator(applications, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    pagination_query = query_params.urlencode()
+    page_prefix = f'{pagination_query}&' if pagination_query else ''
 
     return render(
         request,
         'application/application_list.html',
         {
-            'applications': applications,
+            'applications': page_obj,
             'has_applications': has_applications,
+            'page_obj': page_obj,
+            'page_prefix': page_prefix,
             'search': search,
             'selected_status': selected_status,
             'selected_sort': selected_sort,

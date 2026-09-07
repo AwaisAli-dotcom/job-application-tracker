@@ -525,3 +525,127 @@ class JobApplicationSortingTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response['Location'])
+
+
+class JobApplicationPaginationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username='pageuser',
+            password='testpass123'
+        )
+        cls.other_user = User.objects.create_user(
+            username='otherpageuser',
+            password='testpass123'
+        )
+
+        for number in range(1, 13):
+            application = JobApplication.objects.create(
+                user=cls.user,
+                company=f'Page Company {number:02}',
+                job_title='Backend Developer',
+                location='Remote',
+                status='interview' if number <= 11 else 'saved'
+            )
+            JobApplication.objects.filter(pk=application.pk).update(
+                created_at=datetime(2026, 9, number, tzinfo=timezone.utc),
+                updated_at=datetime(2026, 9, number, tzinfo=timezone.utc)
+            )
+
+        cls.hidden = JobApplication.objects.create(
+            user=cls.other_user,
+            company='Hidden Page Company',
+            job_title='Backend Developer',
+            location='Remote',
+            status='interview'
+        )
+        JobApplication.objects.filter(pk=cls.hidden.pk).update(
+            created_at=datetime(2026, 9, 13, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 9, 13, tzinfo=timezone.utc)
+        )
+
+    def get_list(self, params=None):
+        self.client.force_login(self.user)
+        return self.client.get(reverse('application_list'), params or {})
+
+    def test_first_page_contains_ten_applications(self):
+        response = self.get_list()
+
+        self.assertEqual(len(response.context['applications']), 10)
+        self.assertContains(response, 'Page 1 of 2')
+
+    def test_second_page_works(self):
+        response = self.get_list({'page': 2})
+
+        self.assertEqual(response.context['page_obj'].number, 2)
+        self.assertEqual(len(response.context['applications']), 2)
+
+    def test_previous_and_next_behavior_works(self):
+        first_page = self.get_list()
+        second_page = self.get_list({'page': 2})
+
+        self.assertTrue(first_page.context['page_obj'].has_next())
+        self.assertFalse(first_page.context['page_obj'].has_previous())
+        self.assertTrue(second_page.context['page_obj'].has_previous())
+        self.assertFalse(second_page.context['page_obj'].has_next())
+
+    def test_search_parameter_is_preserved_across_pages(self):
+        response = self.get_list({'search': 'Developer'})
+
+        self.assertContains(response, 'search=Developer&amp;page=2')
+
+    def test_status_filter_is_preserved_across_pages(self):
+        response = self.get_list({'status': 'interview'})
+
+        self.assertContains(response, 'status=interview&amp;page=2')
+
+    def test_sorting_is_preserved_across_pages(self):
+        response = self.get_list({'sort': 'oldest'})
+
+        self.assertContains(response, 'sort=oldest&amp;page=2')
+
+    def test_search_status_sorting_and_pagination_work_together(self):
+        response = self.get_list({
+            'search': 'Developer',
+            'status': 'interview',
+            'sort': 'oldest',
+            'page': 2,
+        })
+        companies = [job.company for job in response.context['applications']]
+
+        self.assertEqual(companies, ['Page Company 11'])
+        self.assertContains(
+            response,
+            'search=Developer&amp;status=interview&amp;sort=oldest&amp;page=1'
+        )
+
+    def test_invalid_page_values_do_not_crash(self):
+        bad_text = self.get_list({'page': 'abc'})
+        too_large = self.get_list({'page': 99999})
+        negative = self.get_list({'page': -5})
+
+        self.assertEqual(bad_text.status_code, 200)
+        self.assertEqual(too_large.status_code, 200)
+        self.assertEqual(negative.status_code, 200)
+
+    def test_pagination_never_exposes_another_users_applications(self):
+        response = self.get_list({
+            'search': 'Developer',
+            'sort': 'newest',
+        })
+
+        self.assertNotContains(response, self.hidden.company)
+
+    def test_no_pagination_controls_when_results_fit_on_one_page(self):
+        response = self.get_list({'status': 'saved'})
+
+        self.assertNotContains(response, 'Page 1 of')
+        self.assertNotContains(response, 'Next')
+        self.assertNotContains(response, 'Previous')
+
+    def test_anonymous_user_is_redirected_to_login_for_pagination(self):
+        response = self.client.get(reverse('application_list'), {'page': 2})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response['Location'])
