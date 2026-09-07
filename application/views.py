@@ -39,6 +39,26 @@ def application_list(request):
     search = request.GET.get('search', '').strip()
     selected_status = request.GET.get('status', '').strip()
     valid_statuses = [value for value, label in JobApplication.STATUS_CHOICES]
+    selected_sort = request.GET.get('sort', 'newest').strip() or 'newest'
+    sort_choices = [
+        ('newest', 'Newest first'),
+        ('oldest', 'Oldest first'),
+        ('updated', 'Recently updated'),
+        ('company_az', 'Company A-Z'),
+        ('company_za', 'Company Z-A'),
+        ('job_title_az', 'Job title A-Z'),
+    ]
+    sort_options = {
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'updated': '-updated_at',
+        'company_az': 'company',
+        'company_za': '-company',
+        'job_title_az': 'job_title',
+    }
+
+    if selected_sort not in sort_options:
+        selected_sort = 'newest'
 
     if search:
         applications = applications.filter(
@@ -50,6 +70,8 @@ def application_list(request):
     if selected_status in valid_statuses:
         applications = applications.filter(status=selected_status)
 
+    applications = applications.order_by(sort_options[selected_sort])
+
     return render(
         request,
         'application/application_list.html',
@@ -58,7 +80,9 @@ def application_list(request):
             'has_applications': has_applications,
             'search': search,
             'selected_status': selected_status,
+            'selected_sort': selected_sort,
             'status_choices': JobApplication.STATUS_CHOICES,
+            'sort_choices': sort_choices,
         }
     )
 

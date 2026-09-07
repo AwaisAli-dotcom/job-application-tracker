@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -385,6 +387,141 @@ class JobApplicationSearchFilterTests(TestCase):
 
     def test_anonymous_user_is_redirected_to_login_for_search(self):
         response = self.client.get(reverse('application_list'), {'search': 'Google'})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('login'), response['Location'])
+
+
+class JobApplicationSortingTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        User = get_user_model()
+        cls.user = User.objects.create_user(
+            username='sortuser',
+            password='testpass123'
+        )
+        cls.other_user = User.objects.create_user(
+            username='othersortuser',
+            password='testpass123'
+        )
+        cls.alpha = JobApplication.objects.create(
+            user=cls.user,
+            company='Alpha Apps',
+            job_title='Python Developer',
+            location='London',
+            status='applied'
+        )
+        cls.beta = JobApplication.objects.create(
+            user=cls.user,
+            company='Beta Labs',
+            job_title='Backend Developer',
+            location='Manchester',
+            status='interview'
+        )
+        cls.gamma = JobApplication.objects.create(
+            user=cls.user,
+            company='Gamma Group',
+            job_title='Frontend Developer',
+            location='Remote',
+            status='interview'
+        )
+        cls.hidden = JobApplication.objects.create(
+            user=cls.other_user,
+            company='Zeta Secret',
+            job_title='Backend Developer',
+            location='Remote',
+            status='interview'
+        )
+
+        JobApplication.objects.filter(pk=cls.alpha.pk).update(
+            created_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 9, 1, tzinfo=timezone.utc)
+        )
+        JobApplication.objects.filter(pk=cls.beta.pk).update(
+            created_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 9, 5, tzinfo=timezone.utc)
+        )
+        JobApplication.objects.filter(pk=cls.gamma.pk).update(
+            created_at=datetime(2026, 9, 3, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 9, 4, tzinfo=timezone.utc)
+        )
+        JobApplication.objects.filter(pk=cls.hidden.pk).update(
+            created_at=datetime(2026, 9, 6, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 9, 6, tzinfo=timezone.utc)
+        )
+
+    def application_companies(self, params=None):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('application_list'), params or {})
+        return [job.company for job in response.context['applications']]
+
+    def test_newest_first(self):
+        companies = self.application_companies({'sort': 'newest'})
+
+        self.assertEqual(companies, ['Gamma Group', 'Beta Labs', 'Alpha Apps'])
+
+    def test_oldest_first(self):
+        companies = self.application_companies({'sort': 'oldest'})
+
+        self.assertEqual(companies, ['Alpha Apps', 'Beta Labs', 'Gamma Group'])
+
+    def test_recently_updated(self):
+        companies = self.application_companies({'sort': 'updated'})
+
+        self.assertEqual(companies, ['Beta Labs', 'Gamma Group', 'Alpha Apps'])
+
+    def test_company_a_to_z(self):
+        companies = self.application_companies({'sort': 'company_az'})
+
+        self.assertEqual(companies, ['Alpha Apps', 'Beta Labs', 'Gamma Group'])
+
+    def test_company_z_to_a(self):
+        companies = self.application_companies({'sort': 'company_za'})
+
+        self.assertEqual(companies, ['Gamma Group', 'Beta Labs', 'Alpha Apps'])
+
+    def test_sorting_works_with_search(self):
+        companies = self.application_companies({
+            'search': 'developer',
+            'sort': 'company_za',
+        })
+
+        self.assertEqual(companies, ['Gamma Group', 'Beta Labs', 'Alpha Apps'])
+
+    def test_sorting_works_with_status_filter(self):
+        companies = self.application_companies({
+            'status': 'interview',
+            'sort': 'company_az',
+        })
+
+        self.assertEqual(companies, ['Beta Labs', 'Gamma Group'])
+
+    def test_sorting_works_with_search_and_status_filter(self):
+        companies = self.application_companies({
+            'search': 'developer',
+            'status': 'interview',
+            'sort': 'newest',
+        })
+
+        self.assertEqual(companies, ['Gamma Group', 'Beta Labs'])
+
+    def test_invalid_sort_parameter_falls_back_to_newest(self):
+        companies = self.application_companies({'sort': 'not-real'})
+
+        self.assertEqual(companies, ['Gamma Group', 'Beta Labs', 'Alpha Apps'])
+
+    def test_sorting_never_exposes_another_users_applications(self):
+        companies = self.application_companies({
+            'search': 'developer',
+            'status': 'interview',
+            'sort': 'company_az',
+        })
+
+        self.assertEqual(companies, ['Beta Labs', 'Gamma Group'])
+        self.assertNotIn('Zeta Secret', companies)
+
+    def test_anonymous_user_is_redirected_to_login_for_sorting(self):
+        response = self.client.get(reverse('application_list'), {'sort': 'oldest'})
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response['Location'])
