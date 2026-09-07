@@ -11,6 +11,11 @@
 
 <div class="container application-list-container">
 
+    <form method="POST" action="{% url 'logout' %}" class="logout-form">
+        {% csrf_token %}
+        <button type="submit">Log Out</button>
+    </form>
+
     <h1>My Job Applications</h1>
 <a class="add-button" href="{% url 'application_create' %}">
     + Add Application
