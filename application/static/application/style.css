@@ -175,3 +175,59 @@ h1 {
     font-size: 15px;
     margin: 5px 0;
 }
+
+.card-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.card-actions .edit-link,
+.card-actions .delete-link {
+    margin-top: 0;
+}
+
+.delete-link {
+    display: inline-block;
+    padding: 8px 14px;
+    background: #fff1f2;
+    color: #b42318;
+    text-decoration: none;
+    border-radius: 7px;
+    font-weight: bold;
+}
+
+.delete-link:hover {
+    background: #ffe4e6;
+    text-decoration: none;
+}
+
+.delete-confirmation {
+    display: block;
+}
+
+.delete-confirmation p {
+    margin-top: 0;
+}
+
+.delete-warning {
+    color: #b42318;
+    font-weight: bold;
+}
+
+.delete-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.danger-button {
+    background: #b42318;
+}
+
+.danger-button:hover {
+    background: #8f1d14;
+    opacity: 1;
+}

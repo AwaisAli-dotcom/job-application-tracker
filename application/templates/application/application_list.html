@@ -35,7 +35,10 @@
                 Status: {{ job.get_status_display }}
             </p>
 
-           <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
+            <div class="card-actions">
+                <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
+                <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
+            </div>
         </div>
 
     {% empty %}

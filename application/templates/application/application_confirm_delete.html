@@ -1,0 +1,38 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Application</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container">
+    <h1>Delete Job Application</h1>
+
+    <a class="back-link" href="{% url 'application_list' %}">
+        Back to Applications
+    </a>
+
+    <div class="form-card delete-confirmation">
+        <p>
+            Are you sure you want to delete the application for
+            <strong>{{ job.job_title }}</strong> at <strong>{{ job.company }}</strong>?
+        </p>
+
+        <p class="delete-warning">
+            This cannot be undone.
+        </p>
+
+        <form method="POST">
+            {% csrf_token %}
+            <div class="delete-actions">
+                <button type="submit" class="danger-button">Yes, delete it</button>
+                <a class="edit-link" href="{% url 'application_list' %}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

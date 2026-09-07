@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
 
 from .models import JobApplication
 from .forms import JobApplicationForm
@@ -36,6 +37,8 @@ def application_create(request):
         'application/application_form.html',
         {'form': form}
     )
+
+
 @login_required
 def application_update(request, pk):
     job = get_object_or_404(
@@ -59,4 +62,24 @@ def application_update(request, pk):
         request,
         'application/application_form.html',
         {'form': form}
+    )
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def application_delete(request, pk):
+    job = get_object_or_404(
+        JobApplication,
+        pk=pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        job.delete()
+        return redirect('application_list')
+
+    return render(
+        request,
+        'application/application_confirm_delete.html',
+        {'job': job}
     )
