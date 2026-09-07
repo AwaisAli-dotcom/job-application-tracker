@@ -391,6 +391,26 @@ class JobApplicationSearchFilterTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response['Location'])
 
+    def test_status_filter_auto_submits_when_changed(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'))
+
+        self.assertContains(
+            response,
+            '<select name="status" onchange="this.form.submit()">'
+        )
+
+    def test_sort_filter_auto_submits_when_changed(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(reverse('application_list'))
+
+        self.assertContains(
+            response,
+            '<select name="sort" onchange="this.form.submit()">'
+        )
+
 
 class JobApplicationSortingTests(TestCase):
     @classmethod

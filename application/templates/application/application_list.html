@@ -11,20 +11,24 @@
 
 <div class="container application-list-container">
 
-    <form method="POST" action="{% url 'logout' %}" class="logout-form">
-        {% csrf_token %}
-        <button type="submit">Log Out</button>
-    </form>
+    <div class="list-header">
+        <div>
+            <h1>My Job Applications</h1>
+            <a class="add-button" href="{% url 'application_create' %}">
+                + Add Application
+            </a>
+        </div>
 
-    <h1>My Job Applications</h1>
-<a class="add-button" href="{% url 'application_create' %}">
-    + Add Application
-</a>
+        <form method="POST" action="{% url 'logout' %}" class="logout-form">
+            {% csrf_token %}
+            <button type="submit">Log Out</button>
+        </form>
+    </div>
 
     <form method="GET" class="filter-form">
         <input type="search" name="search" value="{{ search }}" placeholder="Search applications...">
 
-        <select name="status">
+        <select name="status" onchange="this.form.submit()">
             <option value="">All statuses</option>
             {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
@@ -33,7 +37,7 @@
             {% endfor %}
         </select>
 
-        <select name="sort">
+        <select name="sort" onchange="this.form.submit()">
             {% for value, label in sort_choices %}
                 <option value="{{ value }}" {% if selected_sort == value %}selected{% endif %}>
                     {{ label }}
@@ -45,28 +49,26 @@
         <a href="{% url 'application_list' %}">Clear</a>
     </form>
 
+    <div class="applications-grid">
     {% for job in applications %}
 
         <div class="job-card">
 
-            <h2>{{ job.company }}</h2>
+            <div class="job-card-header">
+                <h2>{{ job.company }}</h2>
+                <span class="status-badge status-{{ job.status }}">{{ job.get_status_display }}</span>
+            </div>
 
             <p>
-                <strong>Job Title:</strong>
                 {{ job.job_title }}
             </p>
 
             <p>
-                <strong>Location:</strong>
                 {{ job.location }}
             </p>
 
-            <p class="status">
-                Status: {{ job.get_status_display }}
-            </p>
-
             <div class="card-actions">
-                <a class="edit-link" href="{% url 'application_detail' job.pk %}">View</a>
+                <a class="view-link" href="{% url 'application_detail' job.pk %}">View</a>
                 <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
                 <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
             </div>
@@ -81,6 +83,7 @@
         {% endif %}
 
     {% endfor %}
+    </div>
 
     {% if page_obj.has_other_pages %}
         <div class="pagination">

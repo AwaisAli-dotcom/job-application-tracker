@@ -327,3 +327,323 @@ h1 {
 .pagination span {
     font-weight: bold;
 }
+
+.application-list-container {
+    max-width: 1100px;
+    margin-top: 24px;
+}
+
+.application-list-container h1 {
+    font-size: 28px;
+    margin-bottom: 16px;
+}
+
+.application-list-container .add-button {
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    border-radius: 7px;
+}
+
+.filter-form {
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.filter-form input,
+.filter-form select,
+.filter-form button,
+.filter-form a {
+    height: 38px;
+    padding: 8px 10px;
+    box-sizing: border-box;
+}
+
+.filter-form select {
+    max-width: 170px;
+}
+
+.applications-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.applications-grid .job-card {
+    padding: 14px 16px;
+    margin-bottom: 0;
+    border-radius: 8px;
+}
+
+.job-card-header {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.application-list-container .job-card h2 {
+    font-size: 18px;
+    line-height: 1.25;
+    margin: 0;
+}
+
+.application-list-container .job-card p {
+    font-size: 14px;
+    line-height: 1.35;
+    margin: 4px 0;
+}
+
+.applications-grid .card-actions {
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.applications-grid .edit-link,
+.applications-grid .delete-link {
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.status-badge {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #eef2f7;
+    color: #344054;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.status-saved {
+    background: #eef2f7;
+    color: #344054;
+}
+
+.status-applied {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.status-interview,
+.status-technical_test {
+    background: #ede9fe;
+    color: #5b21b6;
+}
+
+.status-offer {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-rejected,
+.status-withdrawn {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.application-list-container .pagination {
+    margin-top: 18px;
+}
+
+.application-list-container .pagination a {
+    padding: 7px 12px;
+    border-radius: 6px;
+}
+
+.applications-grid > p {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+    .applications-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-form input,
+    .filter-form select,
+    .filter-form button,
+    .filter-form a {
+        width: 100%;
+        max-width: none;
+    }
+}
+
+.list-header {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.application-list-container {
+    margin-top: 18px;
+}
+
+.application-list-container h1 {
+    font-size: 26px;
+    margin-bottom: 10px;
+}
+
+.application-list-container .add-button {
+    background: #3b6fd8;
+    padding: 9px 14px;
+    border-radius: 8px;
+    box-shadow: 0 6px 14px rgba(59, 111, 216, 0.16);
+}
+
+.application-list-container .add-button:hover {
+    background: #2f5fbe;
+    opacity: 1;
+}
+
+.list-header .logout-form {
+    margin-top: 2px;
+}
+
+.list-header .logout-form button {
+    background: #ffffff;
+    border: 1px solid #d0d5dd;
+    box-shadow: 0 3px 8px rgba(16, 24, 40, 0.06);
+    font-weight: 700;
+}
+
+.list-header .logout-form button:hover {
+    background: #f8fafc;
+    border-color: #98a2b3;
+}
+
+.filter-form {
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.filter-form input,
+.filter-form select,
+.filter-form button,
+.filter-form a {
+    height: 36px;
+}
+
+.filter-form button:hover {
+    background: #111827;
+}
+
+.filter-form a:hover {
+    background: #e2e5e9;
+}
+
+.filter-form a {
+    border: 1px solid #d0d5dd;
+    display: inline-flex;
+    align-items: center;
+}
+
+.filter-form a:hover {
+    border-color: #98a2b3;
+}
+
+.applications-grid {
+    gap: 12px;
+}
+
+.applications-grid .job-card {
+    padding: 12px 14px;
+    box-shadow: 0 3px 10px rgba(16, 24, 40, 0.07);
+}
+
+.applications-grid .job-card:hover {
+    box-shadow: 0 6px 16px rgba(16, 24, 40, 0.1);
+}
+
+.job-card-header {
+    margin-bottom: 6px;
+}
+
+.application-list-container .job-card h2 {
+    font-size: 17px;
+}
+
+.application-list-container .job-card p {
+    margin: 3px 0;
+}
+
+.applications-grid .card-actions {
+    gap: 7px;
+    margin-top: 10px;
+}
+
+.applications-grid .view-link,
+.applications-grid .edit-link,
+.applications-grid .delete-link {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.applications-grid .view-link {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.applications-grid .view-link:hover {
+    background: #bbf7d0;
+}
+
+.applications-grid .edit-link {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.applications-grid .edit-link:hover {
+    background: #bfdbfe;
+}
+
+.applications-grid .delete-link {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.applications-grid .delete-link:hover {
+    background: #fecaca;
+}
+
+.status-badge {
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.04);
+}
+
+.status-technical_test {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-withdrawn {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.application-list-container .pagination {
+    gap: 10px;
+}
+
+.application-list-container .pagination a {
+    box-shadow: 0 2px 6px rgba(16, 24, 40, 0.06);
+}
+
+@media (max-width: 760px) {
+    .list-header {
+        display: block;
+    }
+
+    .list-header .logout-form {
+        margin-top: 12px;
+        text-align: left;
+    }
+}
