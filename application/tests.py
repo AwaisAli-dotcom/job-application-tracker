@@ -182,3 +182,79 @@ class JobApplicationDeleteTests(TestCase):
         self.assertTrue(
             JobApplication.objects.filter(pk=self.application.pk).exists()
         )
+
+
+class JobApplicationDetailTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.owner = User.objects.create_user(
+            username='detailowner',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='detailother',
+            password='testpass123'
+        )
+        self.application = JobApplication.objects.create(
+            user=self.owner,
+            company='Detail Company',
+            job_title='Django Developer',
+            location='Remote',
+            job_url='https://example.com/job',
+            employment_type='full_time',
+            status='interview',
+            salary='50000',
+            application_date='2026-09-01',
+            notes='Prepare for technical interview.'
+        )
+
+    def test_owner_can_view_application_detail(self):
+        self.client.login(username='detailowner', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_detail', args=[self.application.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_another_user_cannot_view_application_detail(self):
+        self.client.login(username='detailother', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_detail', args=[self.application.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_anonymous_user_is_redirected_to_login_for_detail(self):
+        detail_url = reverse('application_detail', args=[self.application.pk])
+
+        response = self.client.get(detail_url)
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={detail_url}"
+        )
+
+    def test_application_data_appears_on_detail_page(self):
+        self.client.login(username='detailowner', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_detail', args=[self.application.pk])
+        )
+
+        self.assertContains(response, 'Detail Company')
+        self.assertContains(response, 'Django Developer')
+        self.assertContains(response, 'Remote')
+        self.assertContains(response, 'https://example.com/job')
+        self.assertContains(response, 'Full-time')
+        self.assertContains(response, 'Interview')
+        self.assertContains(response, '50000')
+        self.assertContains(response, 'Prepare for technical interview.')
+
+    def test_nonexistent_application_detail_returns_404(self):
+        self.client.login(username='detailowner', password='testpass123')
+
+        response = self.client.get(reverse('application_detail', args=[99999]))
+
+        self.assertEqual(response.status_code, 404)

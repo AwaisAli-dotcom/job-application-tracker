@@ -43,6 +43,21 @@ def application_list(request):
 
 
 @login_required
+def application_detail(request, pk):
+    job = get_object_or_404(
+        JobApplication,
+        pk=pk,
+        user=request.user
+    )
+
+    return render(
+        request,
+        'application/application_detail.html',
+        {'job': job}
+    )
+
+
+@login_required
 def application_create(request):
     if request.method == 'POST':
         form = JobApplicationForm(request.POST)

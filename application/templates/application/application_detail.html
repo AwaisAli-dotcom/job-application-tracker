@@ -1,0 +1,89 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ job.company }} - {{ job.job_title }}</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container application-list-container">
+    <a class="back-link" href="{% url 'application_list' %}">
+        Back to Applications
+    </a>
+
+    <div class="job-card">
+        <h1>{{ job.company }}</h1>
+
+        <p>
+            <strong>Job Title:</strong>
+            {{ job.job_title }}
+        </p>
+
+        {% if job.location %}
+            <p>
+                <strong>Location:</strong>
+                {{ job.location }}
+            </p>
+        {% endif %}
+
+        {% if job.job_url %}
+            <p>
+                <strong>Job URL:</strong>
+                <a href="{{ job.job_url }}" target="_blank" rel="noopener noreferrer">
+                    {{ job.job_url }}
+                </a>
+            </p>
+        {% endif %}
+
+        {% if job.employment_type %}
+            <p>
+                <strong>Employment Type:</strong>
+                {{ job.get_employment_type_display }}
+            </p>
+        {% endif %}
+
+        <p class="status">
+            Status: {{ job.get_status_display }}
+        </p>
+
+        {% if job.salary %}
+            <p>
+                <strong>Salary:</strong>
+                {{ job.salary }}
+            </p>
+        {% endif %}
+
+        {% if job.application_date %}
+            <p>
+                <strong>Application Date:</strong>
+                {{ job.application_date }}
+            </p>
+        {% endif %}
+
+        {% if job.notes %}
+            <p>
+                <strong>Notes:</strong>
+                {{ job.notes }}
+            </p>
+        {% endif %}
+
+        <p>
+            <strong>Created:</strong>
+            {{ job.created_at }}
+        </p>
+
+        <p>
+            <strong>Updated:</strong>
+            {{ job.updated_at }}
+        </p>
+
+        <div class="card-actions">
+            <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
+            <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
