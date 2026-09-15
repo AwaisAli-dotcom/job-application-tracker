@@ -354,6 +354,122 @@ class JobApplicationDetailTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class JobApplicationKanbanTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='kanbanuser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='otherkanbanuser',
+            password='testpass123'
+        )
+        self.application = JobApplication.objects.create(
+            user=self.user,
+            company='Kanban Company',
+            job_title='Python Developer',
+            location='Remote',
+            status='applied'
+        )
+        self.hidden_application = JobApplication.objects.create(
+            user=self.other_user,
+            company='Hidden Kanban Company',
+            job_title='Secret Developer',
+            location='Remote',
+            status='interview'
+        )
+
+    def test_owner_can_view_kanban_board(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.get(reverse('kanban_board'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Kanban Company')
+        self.assertContains(response, 'Applied')
+
+    def test_kanban_board_never_exposes_other_users_applications(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.get(reverse('kanban_board'))
+
+        self.assertContains(response, self.application.company)
+        self.assertNotContains(response, self.hidden_application.company)
+
+    def test_anonymous_user_is_redirected_from_kanban(self):
+        response = self.client.get(reverse('kanban_board'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('kanban_board')}"
+        )
+
+    def test_owner_can_update_status(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_status_update', args=[self.application.pk]),
+            {'status': 'interview'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertJSONEqual(
+            response.content,
+            {'ok': True, 'status': 'interview', 'status_label': 'Interview'}
+        )
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, 'interview')
+
+    def test_status_update_fallback_redirects_to_kanban(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_status_update', args=[self.application.pk]),
+            {'status': 'technical_test'}
+        )
+
+        self.assertRedirects(response, reverse('kanban_board'))
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, 'technical_test')
+
+    def test_invalid_status_is_rejected(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_status_update', args=[self.application.pk]),
+            {'status': 'not-real'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, 'applied')
+
+    def test_get_status_update_is_rejected(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_status_update', args=[self.application.pk])
+        )
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_user_cannot_update_another_users_status(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_status_update', args=[self.hidden_application.pk]),
+            {'status': 'offer'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.hidden_application.refresh_from_db()
+        self.assertEqual(self.hidden_application.status, 'interview')
+
+
 class JobApplicationSearchFilterTests(TestCase):
     def setUp(self):
         User = get_user_model()

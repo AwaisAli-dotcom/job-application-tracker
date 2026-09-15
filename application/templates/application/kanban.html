@@ -1,0 +1,158 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kanban Board</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container kanban-container">
+    <div class="list-header">
+        <div>
+            <h1>Kanban Board</h1>
+            <div class="dashboard-nav">
+                <a href="{% url 'dashboard' %}">Dashboard</a>
+                <a href="{% url 'application_list' %}">Applications</a>
+                <a href="{% url 'application_create' %}">Add Application</a>
+            </div>
+        </div>
+
+        <form method="POST" action="{% url 'logout' %}" class="logout-form">
+            {% csrf_token %}
+            <button type="submit">Log Out</button>
+        </form>
+    </div>
+
+    <div class="kanban-board">
+        {% for column in columns %}
+            <section class="kanban-column" data-status="{{ column.value }}">
+                <div class="kanban-column-header">
+                    <h2>{{ column.label }}</h2>
+                    <span>{{ column.count }}</span>
+                </div>
+
+                <div class="kanban-card-list">
+                    {% for job in column.applications %}
+                        <article class="kanban-card" draggable="true" data-update-url="{% url 'application_status_update' job.pk %}">
+                            <div class="job-card-header">
+                                <h3>{{ job.company }}</h3>
+                                <span class="status-badge status-{{ job.status }}">{{ job.get_status_display }}</span>
+                            </div>
+
+                            <p>{{ job.job_title }}</p>
+
+                            {% if job.location %}
+                                <p class="kanban-meta">{{ job.location }}</p>
+                            {% endif %}
+
+                            {% if job.application_date %}
+                                <p class="kanban-meta">{{ job.application_date }}</p>
+                            {% endif %}
+
+                            <form method="POST" action="{% url 'application_status_update' job.pk %}" class="kanban-status-form">
+                                {% csrf_token %}
+                                <label>
+                                    <span class="sr-only">Change status for {{ job.company }}</span>
+                                    <select name="status" onchange="this.form.submit()">
+                                        {% for value, label in status_choices %}
+                                            <option value="{{ value }}" {% if job.status == value %}selected{% endif %}>
+                                                {{ label }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
+                            </form>
+
+                            <div class="card-actions">
+                                <a class="view-link" href="{% url 'application_detail' job.pk %}">View</a>
+                                <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
+                            </div>
+                        </article>
+                    {% empty %}
+                        <p class="kanban-empty">No applications</p>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    var draggedCard = null;
+
+    document.querySelectorAll('.kanban-card').forEach(function (card) {
+        card.addEventListener('dragstart', function () {
+            draggedCard = card;
+            card.classList.add('is-dragging');
+        });
+
+        card.addEventListener('dragend', function () {
+            card.classList.remove('is-dragging');
+        });
+    });
+
+    document.querySelectorAll('.kanban-column').forEach(function (column) {
+        column.addEventListener('dragover', function (event) {
+            event.preventDefault();
+        });
+
+        column.addEventListener('drop', function () {
+            if (!draggedCard) {
+                return;
+            }
+
+            var newStatus = column.dataset.status;
+            var select = draggedCard.querySelector('select[name="status"]');
+
+            if (select.value === newStatus) {
+                return;
+            }
+
+            column.querySelector('.kanban-card-list').appendChild(draggedCard);
+            updateStatus(draggedCard, newStatus, select);
+        });
+    });
+
+    function updateStatus(card, status, select) {
+        var csrfToken = card.querySelector('input[name="csrfmiddlewaretoken"]').value;
+        var formData = new FormData();
+        formData.append('status', status);
+
+        fetch(card.dataset.updateUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(function (response) {
+            if (!response.ok) {
+                throw new Error('Status update failed.');
+            }
+
+            return response.json();
+        })
+        .then(function (data) {
+            select.value = data.status;
+            var badge = card.querySelector('.status-badge');
+            badge.textContent = data.status_label;
+            badge.className = 'status-badge status-' + data.status;
+            updateColumnCounts();
+        })
+        .catch(function () {
+            window.location.reload();
+        });
+    }
+
+    function updateColumnCounts() {
+        document.querySelectorAll('.kanban-column').forEach(function (column) {
+            var count = column.querySelectorAll('.kanban-card').length;
+            column.querySelector('.kanban-column-header span').textContent = count;
+        });
+    }
+</script>
+
+</body>
+</html>

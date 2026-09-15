@@ -6,10 +6,11 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.core.paginator import Paginator
+from django.http import JsonResponse
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import JobApplication
 from .forms import JobApplicationForm
@@ -220,6 +221,64 @@ def application_detail(request, pk):
         'application/application_detail.html',
         {'job': job}
     )
+
+
+@login_required
+def kanban_board(request):
+    applications = JobApplication.objects.filter(user=request.user).order_by('-updated_at')
+    columns = []
+
+    for value, label in JobApplication.STATUS_CHOICES:
+        column_applications = [job for job in applications if job.status == value]
+        columns.append(
+            {
+                'value': value,
+                'label': label,
+                'applications': column_applications,
+                'count': len(column_applications),
+            }
+        )
+
+    return render(
+        request,
+        'application/kanban.html',
+        {
+            'columns': columns,
+            'status_choices': JobApplication.STATUS_CHOICES,
+        }
+    )
+
+
+@login_required
+@require_POST
+def update_application_status(request, pk):
+    job = get_object_or_404(
+        JobApplication,
+        pk=pk,
+        user=request.user
+    )
+    new_status = request.POST.get('status', '').strip()
+    valid_statuses = [value for value, label in JobApplication.STATUS_CHOICES]
+
+    if new_status not in valid_statuses:
+        return JsonResponse(
+            {'ok': False, 'error': 'Invalid status.'},
+            status=400
+        )
+
+    job.status = new_status
+    job.save(update_fields=['status', 'updated_at'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse(
+            {
+                'ok': True,
+                'status': job.status,
+                'status_label': job.get_status_display(),
+            }
+        )
+
+    return redirect('kanban_board')
 
 
 @login_required
