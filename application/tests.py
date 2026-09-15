@@ -1,9 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone as django_timezone
 
+from .forms import JobApplicationForm
 from .models import JobApplication
 
 
@@ -669,3 +672,190 @@ class JobApplicationPaginationTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response['Location'])
+
+
+class JobApplicationFormValidationTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='formuser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='otherformuser',
+            password='testpass123'
+        )
+        self.existing_application = JobApplication.objects.create(
+            user=self.user,
+            company='Original Company',
+            job_title='Original Title',
+            location='Original Location',
+            status='saved'
+        )
+
+    def valid_form_data(self, **overrides):
+        data = {
+            'company': 'Example Company',
+            'job_title': 'Python Developer',
+            'location': 'Remote',
+            'job_url': 'https://example.com/job',
+            'employment_type': 'full_time',
+            'status': 'applied',
+            'salary': '2500-3000 EUR',
+            'application_date': django_timezone.localdate(),
+            'notes': 'Follow up next week.',
+        }
+        data.update(overrides)
+        return data
+
+    def test_empty_company_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(company=''))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['company'], ['Company name is required.'])
+
+    def test_whitespace_only_company_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(company='     '))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['company'], ['Company name is required.'])
+
+    def test_empty_job_title_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(job_title=''))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['job_title'], ['Job title is required.'])
+
+    def test_whitespace_only_job_title_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(job_title='     '))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['job_title'], ['Job title is required.'])
+
+    def test_blank_location_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(location=''))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['location'], ['Location is required.'])
+
+    def test_whitespace_only_location_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(location='     '))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['location'], ['Location is required.'])
+
+    def test_blank_salary_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(salary=''))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['salary'], ['Salary is required.'])
+
+    def test_blank_application_date_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(application_date=''))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['application_date'], ['Application date is required.'])
+
+    def test_invalid_url_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(job_url='not a url'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['job_url'], ['Enter a valid job URL.'])
+
+    def test_blank_url_allowed(self):
+        form = JobApplicationForm(data=self.valid_form_data(job_url=''))
+
+        self.assertTrue(form.is_valid())
+
+    def test_tomorrow_application_date_rejected(self):
+        tomorrow = django_timezone.localdate() + timedelta(days=1)
+        form = JobApplicationForm(
+            data=self.valid_form_data(application_date=tomorrow)
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['application_date'],
+            ['Application date cannot be in the future.']
+        )
+
+    def test_today_application_date_allowed(self):
+        form = JobApplicationForm(
+            data=self.valid_form_data(application_date=django_timezone.localdate())
+        )
+
+        self.assertTrue(form.is_valid())
+
+    def test_yesterday_application_date_allowed(self):
+        yesterday = django_timezone.localdate() - timedelta(days=1)
+        form = JobApplicationForm(
+            data=self.valid_form_data(application_date=yesterday)
+        )
+
+        self.assertTrue(form.is_valid())
+
+    def test_project_uses_lithuania_timezone(self):
+        self.assertEqual(settings.TIME_ZONE, 'Europe/Vilnius')
+
+    def test_valid_form_creates_application(self):
+        self.client.login(username='formuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_create'),
+            self.valid_form_data(company='  Trimmed Company  ')
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        self.assertTrue(
+            JobApplication.objects.filter(
+                user=self.user,
+                company='Trimmed Company'
+            ).exists()
+        )
+
+    def test_invalid_edit_does_not_corrupt_existing_application(self):
+        self.client.login(username='formuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_update', args=[self.existing_application.pk]),
+            self.valid_form_data(company='', job_title='Changed Title')
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.existing_application.refresh_from_db()
+        self.assertEqual(self.existing_application.company, 'Original Company')
+        self.assertEqual(self.existing_application.job_title, 'Original Title')
+
+    def test_validation_does_not_weaken_edit_ownership(self):
+        self.client.login(username='otherformuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_update', args=[self.existing_application.pk]),
+            self.valid_form_data(company='')
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.existing_application.refresh_from_db()
+        self.assertEqual(self.existing_application.company, 'Original Company')
+
+    def test_application_form_uses_browser_required_validation(self):
+        self.client.login(username='formuser', password='testpass123')
+
+        response = self.client.get(reverse('application_create'))
+
+        self.assertContains(response, '<form method="POST" class="form-card">')
+        self.assertNotContains(response, 'novalidate')
+        self.assertContains(response, 'name="company"')
+        self.assertContains(response, 'required')
+
+    def test_multiple_validation_errors_show_together(self):
+        self.client.login(username='formuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_create'),
+            self.valid_form_data(company='', job_url='not a url')
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Company name is required.')
+        self.assertContains(response, 'Enter a valid job URL.')
