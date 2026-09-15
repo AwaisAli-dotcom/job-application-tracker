@@ -43,6 +43,20 @@
             </p>
         {% endif %}
 
+        {% if job.work_mode %}
+            <p>
+                <strong>Work Mode:</strong>
+                {{ job.get_work_mode_display }}
+            </p>
+        {% endif %}
+
+        {% if job.source %}
+            <p>
+                <strong>Source:</strong>
+                {{ job.source }}
+            </p>
+        {% endif %}
+
         <p class="status">
             Status: {{ job.get_status_display }}
         </p>
@@ -54,10 +68,27 @@
             </p>
         {% endif %}
 
+        {% if job.salary_min or job.salary_max %}
+            <p>
+                <strong>Salary Range:</strong>
+                {% if job.salary_min %}{{ job.salary_min }}{% endif %}
+                {% if job.salary_min and job.salary_max %}-{% endif %}
+                {% if job.salary_max %}{{ job.salary_max }}{% endif %}
+                {{ job.currency }}
+            </p>
+        {% endif %}
+
         {% if job.application_date %}
             <p>
                 <strong>Application Date:</strong>
                 {{ job.application_date }}
+            </p>
+        {% endif %}
+
+        {% if job.deadline %}
+            <p>
+                <strong>Deadline:</strong>
+                {{ job.deadline }}
             </p>
         {% endif %}
 

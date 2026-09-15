@@ -22,6 +22,12 @@ class JobApplication(models.Model):
         ('remote', 'Remote'),
     ]
 
+    WORK_MODE_CHOICES = [
+        ('onsite', 'On-site'),
+        ('hybrid', 'Hybrid'),
+        ('remote', 'Remote'),
+    ]
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -46,6 +52,17 @@ class JobApplication(models.Model):
         blank=True
     )
 
+    work_mode = models.CharField(
+        max_length=20,
+        choices=WORK_MODE_CHOICES,
+        blank=True
+    )
+
+    source = models.CharField(
+        max_length=80,
+        blank=True
+    )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -57,7 +74,31 @@ class JobApplication(models.Model):
         blank=True
     )
 
+    salary_min = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    salary_max = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    currency = models.CharField(
+        max_length=3,
+        default='EUR'
+    )
+
     application_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    deadline = models.DateField(
         null=True,
         blank=True
     )

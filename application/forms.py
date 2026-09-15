@@ -13,17 +13,28 @@ class JobApplicationForm(forms.ModelForm):
             'location',
             'job_url',
             'employment_type',
+            'work_mode',
+            'source',
             'status',
             'salary',
+            'salary_min',
+            'salary_max',
+            'currency',
             'application_date',
+            'deadline',
             'notes',
         ]
         labels = {
             'job_url': 'Job URL (optional)',
+            'salary_min': 'Salary minimum (optional)',
+            'salary_max': 'Salary maximum (optional)',
+            'currency': 'Currency (optional)',
+            'deadline': 'Deadline (optional)',
         }
         widgets = {
             'job_url': forms.TextInput(),
             'application_date': forms.DateInput(attrs={'type': 'date'}),
+            'deadline': forms.DateInput(attrs={'type': 'date'}),
         }
         error_messages = {
             'company': {
@@ -54,6 +65,8 @@ class JobApplicationForm(forms.ModelForm):
         self.fields['location'].required = True
         self.fields['salary'].required = True
         self.fields['application_date'].required = True
+        self.fields['currency'].required = False
+        self.fields['currency'].initial = 'EUR'
 
     def clean_company(self):
         company = self.cleaned_data.get('company', '').strip()
@@ -86,6 +99,35 @@ class JobApplicationForm(forms.ModelForm):
             raise forms.ValidationError('Application date cannot be in the future.')
 
         return application_date
+
+    def clean_currency(self):
+        currency = self.cleaned_data.get('currency', '').strip().upper()
+
+        return currency or 'EUR'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        salary_min = cleaned_data.get('salary_min')
+        salary_max = cleaned_data.get('salary_max')
+        application_date = cleaned_data.get('application_date')
+        deadline = cleaned_data.get('deadline')
+
+        if salary_min is not None and salary_min < 0:
+            self.add_error('salary_min', 'Salary minimum cannot be negative.')
+
+        if salary_max is not None and salary_max < 0:
+            self.add_error('salary_max', 'Salary maximum cannot be negative.')
+
+        valid_salary_min = salary_min is not None and salary_min >= 0
+        valid_salary_max = salary_max is not None and salary_max >= 0
+
+        if valid_salary_min and valid_salary_max and salary_max < salary_min:
+            self.add_error('salary_max', 'Salary maximum must be greater than or equal to salary minimum.')
+
+        if application_date and deadline and deadline < application_date:
+            self.add_error('deadline', 'Deadline cannot be before the application date.')
+
+        return cleaned_data
 
 
 class InterviewForm(forms.ModelForm):

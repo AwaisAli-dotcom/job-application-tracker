@@ -296,9 +296,15 @@ class JobApplicationDetailTests(TestCase):
             location='Remote',
             job_url='https://example.com/job',
             employment_type='full_time',
+            work_mode='remote',
+            source='LinkedIn',
             status='interview',
             salary='50000',
+            salary_min='45000',
+            salary_max='55000',
+            currency='EUR',
             application_date='2026-09-01',
+            deadline='2026-09-15',
             notes='Prepare for technical interview.'
         )
 
@@ -342,8 +348,14 @@ class JobApplicationDetailTests(TestCase):
         self.assertContains(response, 'Remote')
         self.assertContains(response, 'https://example.com/job')
         self.assertContains(response, 'Full-time')
+        self.assertContains(response, 'Remote')
+        self.assertContains(response, 'LinkedIn')
         self.assertContains(response, 'Interview')
         self.assertContains(response, '50000')
+        self.assertContains(response, '45000.00')
+        self.assertContains(response, '55000.00')
+        self.assertContains(response, 'EUR')
+        self.assertContains(response, 'Sept. 15, 2026')
         self.assertContains(response, 'Prepare for technical interview.')
 
     def test_status_history_appears_on_detail_page(self):
@@ -1455,9 +1467,15 @@ class JobApplicationFormValidationTests(TestCase):
             'location': 'Remote',
             'job_url': 'https://example.com/job',
             'employment_type': 'full_time',
+            'work_mode': 'remote',
+            'source': 'LinkedIn',
             'status': 'applied',
             'salary': '2500-3000 EUR',
+            'salary_min': '2500',
+            'salary_max': '3000',
+            'currency': 'EUR',
             'application_date': django_timezone.localdate(),
+            'deadline': django_timezone.localdate() + timedelta(days=7),
             'notes': 'Follow up next week.',
         }
         data.update(overrides)
@@ -1521,6 +1539,41 @@ class JobApplicationFormValidationTests(TestCase):
         form = JobApplicationForm(data=self.valid_form_data(job_url=''))
 
         self.assertTrue(form.is_valid())
+
+    def test_negative_salary_min_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(salary_min='-1'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['salary_min'], ['Salary minimum cannot be negative.'])
+
+    def test_negative_salary_max_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(salary_max='-1'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['salary_max'], ['Salary maximum cannot be negative.'])
+
+    def test_salary_max_lower_than_salary_min_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(salary_min='3000', salary_max='2500'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['salary_max'],
+            ['Salary maximum must be greater than or equal to salary minimum.']
+        )
+
+    def test_blank_structured_salary_fields_allowed(self):
+        form = JobApplicationForm(data=self.valid_form_data(salary_min='', salary_max=''))
+
+        self.assertTrue(form.is_valid())
+
+    def test_deadline_before_application_date_rejected(self):
+        today = django_timezone.localdate()
+        form = JobApplicationForm(
+            data=self.valid_form_data(application_date=today, deadline=today - timedelta(days=1))
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['deadline'], ['Deadline cannot be before the application date.'])
 
     def test_tomorrow_application_date_rejected(self):
         tomorrow = django_timezone.localdate() + timedelta(days=1)
