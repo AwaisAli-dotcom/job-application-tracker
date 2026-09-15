@@ -989,3 +989,31 @@ h1 {
     color: #667085;
     font-size: 13px;
 }
+
+.interview-list {
+    display: grid;
+    gap: 10px;
+}
+
+.interview-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #eef2f7;
+}
+
+.interview-item span {
+    display: block;
+    margin-top: 4px;
+    color: #667085;
+    font-size: 13px;
+}
+
+@media (max-width: 700px) {
+    .interview-item {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

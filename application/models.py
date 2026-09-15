@@ -106,3 +106,62 @@ class StatusHistory(models.Model):
 
     def __str__(self):
         return f"{self.application} moved from {self.old_status} to {self.new_status}"
+
+
+class Interview(models.Model):
+    INTERVIEW_TYPE_CHOICES = [
+        ('hr_screen', 'HR Screen'),
+        ('hiring_manager', 'Hiring Manager'),
+        ('technical', 'Technical'),
+        ('take_home_review', 'Take-home Review'),
+        ('final', 'Final'),
+        ('other', 'Other'),
+    ]
+
+    MODE_CHOICES = [
+        ('video', 'Video'),
+        ('phone', 'Phone'),
+        ('onsite', 'On-site'),
+        ('other', 'Other'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='interviews'
+    )
+    application = models.ForeignKey(
+        JobApplication,
+        on_delete=models.CASCADE,
+        related_name='interviews'
+    )
+    interview_type = models.CharField(
+        max_length=30,
+        choices=INTERVIEW_TYPE_CHOICES,
+        default='hr_screen'
+    )
+    mode = models.CharField(
+        max_length=20,
+        choices=MODE_CHOICES,
+        default='video'
+    )
+    scheduled_at = models.DateTimeField()
+    outcome = models.CharField(
+        max_length=150,
+        blank=True
+    )
+    notes = models.TextField(
+        blank=True
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        ordering = ['scheduled_at']
+
+    def __str__(self):
+        return f"{self.application} interview on {self.scheduled_at}"

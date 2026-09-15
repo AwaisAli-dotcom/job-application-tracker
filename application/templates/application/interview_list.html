@@ -1,0 +1,71 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interviews</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container application-list-container">
+    <div class="list-header">
+        <div>
+            <h1>Interviews</h1>
+            <div class="dashboard-nav">
+                <a href="{% url 'dashboard' %}">Dashboard</a>
+                <a href="{% url 'application_list' %}">Applications</a>
+                <a href="{% url 'kanban_board' %}">Kanban</a>
+            </div>
+        </div>
+
+        <form method="POST" action="{% url 'logout' %}" class="logout-form">
+            {% csrf_token %}
+            <button type="submit">Log Out</button>
+        </form>
+    </div>
+
+    <section class="dashboard-panel">
+        <h2>Upcoming</h2>
+        <div class="interview-list">
+            {% for interview in upcoming_interviews %}
+                <div class="interview-item">
+                    <div>
+                        <strong>{{ interview.application.company }}</strong>
+                        <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
+                    </div>
+                    <div class="card-actions">
+                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">Application</a>
+                        <a class="edit-link" href="{% url 'interview_update' interview.pk %}">Edit</a>
+                        <a class="delete-link" href="{% url 'interview_delete' interview.pk %}">Delete</a>
+                    </div>
+                </div>
+            {% empty %}
+                <p>No upcoming interviews.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="dashboard-panel">
+        <h2>Past</h2>
+        <div class="interview-list">
+            {% for interview in past_interviews %}
+                <div class="interview-item">
+                    <div>
+                        <strong>{{ interview.application.company }}</strong>
+                        <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
+                    </div>
+                    <div class="card-actions">
+                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">Application</a>
+                        <a class="edit-link" href="{% url 'interview_update' interview.pk %}">Edit</a>
+                        <a class="delete-link" href="{% url 'interview_delete' interview.pk %}">Delete</a>
+                    </div>
+                </div>
+            {% empty %}
+                <p>No past interviews.</p>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+
+</body>
+</html>

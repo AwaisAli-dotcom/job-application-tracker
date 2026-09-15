@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone as django_timezone
 
 from .forms import JobApplicationForm
-from .models import JobApplication, StatusHistory
+from .models import Interview, JobApplication, StatusHistory
 
 
 class AuthenticationTests(TestCase):
@@ -515,6 +515,190 @@ class JobApplicationKanbanTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.hidden_application.refresh_from_db()
         self.assertEqual(self.hidden_application.status, 'interview')
+
+
+class InterviewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='interviewuser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='otherinterviewuser',
+            password='testpass123'
+        )
+        self.application = JobApplication.objects.create(
+            user=self.user,
+            company='Interview App Company',
+            job_title='Django Developer',
+            status='interview'
+        )
+        self.other_application = JobApplication.objects.create(
+            user=self.other_user,
+            company='Hidden Interview App Company',
+            job_title='Secret Developer',
+            status='interview'
+        )
+        self.future_time = django_timezone.now() + timedelta(days=2)
+        self.past_time = django_timezone.now() - timedelta(days=2)
+        self.interview = Interview.objects.create(
+            user=self.user,
+            application=self.application,
+            interview_type='technical',
+            mode='video',
+            scheduled_at=self.future_time,
+            notes='Prepare Django examples.'
+        )
+        self.hidden_interview = Interview.objects.create(
+            user=self.other_user,
+            application=self.other_application,
+            interview_type='final',
+            mode='phone',
+            scheduled_at=self.future_time
+        )
+
+    def interview_form_data(self, **overrides):
+        data = {
+            'interview_type': 'hr_screen',
+            'mode': 'video',
+            'scheduled_at': (django_timezone.now() + timedelta(days=5)).strftime('%Y-%m-%dT%H:%M'),
+            'outcome': '',
+            'notes': 'Initial conversation.',
+        }
+        data.update(overrides)
+        return data
+
+    def test_interview_list_shows_only_current_users_interviews(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.get(reverse('interview_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.application.company)
+        self.assertNotContains(response, self.other_application.company)
+
+    def test_anonymous_user_is_redirected_from_interviews(self):
+        response = self.client.get(reverse('interview_list'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('interview_list')}"
+        )
+
+    def test_owner_can_create_interview_for_own_application(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('interview_create', args=[self.application.pk]),
+            self.interview_form_data()
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.assertTrue(
+            Interview.objects.filter(
+                user=self.user,
+                application=self.application,
+                interview_type='hr_screen'
+            ).exists()
+        )
+
+    def test_user_cannot_create_interview_for_another_users_application(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('interview_create', args=[self.other_application.pk]),
+            self.interview_form_data()
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            Interview.objects.filter(
+                user=self.user,
+                application=self.other_application
+            ).exists()
+        )
+
+    def test_owner_can_update_interview(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('interview_update', args=[self.interview.pk]),
+            self.interview_form_data(outcome='Moved to next round')
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.interview.refresh_from_db()
+        self.assertEqual(self.interview.outcome, 'Moved to next round')
+
+    def test_user_cannot_update_another_users_interview(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('interview_update', args=[self.hidden_interview.pk]),
+            self.interview_form_data(outcome='Changed')
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.hidden_interview.refresh_from_db()
+        self.assertEqual(self.hidden_interview.outcome, '')
+
+    def test_owner_can_delete_interview(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.post(reverse('interview_delete', args=[self.interview.pk]))
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.assertFalse(Interview.objects.filter(pk=self.interview.pk).exists())
+
+    def test_user_cannot_delete_another_users_interview(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.post(reverse('interview_delete', args=[self.hidden_interview.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Interview.objects.filter(pk=self.hidden_interview.pk).exists())
+
+    def test_interview_appears_on_application_detail(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.get(reverse('application_detail', args=[self.application.pk]))
+
+        self.assertContains(response, 'Technical')
+        self.assertContains(response, 'Prepare Django examples.')
+
+    def test_dashboard_shows_upcoming_interviews(self):
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'Upcoming Interviews')
+        self.assertContains(response, self.application.company)
+        self.assertNotContains(response, self.other_application.company)
+
+    def test_past_interviews_are_separated_from_upcoming(self):
+        Interview.objects.create(
+            user=self.user,
+            application=self.application,
+            interview_type='final',
+            mode='video',
+            scheduled_at=self.past_time
+        )
+        self.client.login(username='interviewuser', password='testpass123')
+
+        response = self.client.get(reverse('interview_list'))
+
+        self.assertContains(response, 'Upcoming')
+        self.assertContains(response, 'Past')
 
 
 class JobApplicationSearchFilterTests(TestCase):

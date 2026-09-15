@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interview - {{ application.company }}</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container">
+    <h1>{% if interview %}Edit Interview{% else %}Add Interview{% endif %}</h1>
+    <a class="back-link" href="{% url 'application_detail' application.pk %}">
+        Back to Application
+    </a>
+
+    <form method="POST" class="form-card">
+        {% csrf_token %}
+
+        <p class="required-note"><span class="required-marker">*</span> Required fields</p>
+
+        {% for field in form %}
+            <div class="form-field">
+                <label for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                    {% if field.field.required %}
+                        <span class="required-marker" aria-hidden="true">*</span>
+                        <span class="sr-only">required</span>
+                    {% endif %}
+                </label>
+                {{ field }}
+                {{ field.errors }}
+            </div>
+        {% endfor %}
+
+        <button type="submit">Save Interview</button>
+    </form>
+</div>
+
+</body>
+</html>

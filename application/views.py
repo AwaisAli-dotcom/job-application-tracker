@@ -12,8 +12,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .models import JobApplication, StatusHistory
-from .forms import JobApplicationForm
+from .models import Interview, JobApplication, StatusHistory
+from .forms import InterviewForm, JobApplicationForm
 
 
 def home(request):
@@ -114,6 +114,10 @@ def dashboard(request):
         for value, label in JobApplication.STATUS_CHOICES
     ]
     max_status_count = max([item['count'] for item in status_chart] + [1])
+    upcoming_interviews = Interview.objects.filter(
+        user=request.user,
+        scheduled_at__gte=timezone.now()
+    ).select_related('application').order_by('scheduled_at')[:5]
 
     return render(
         request,
@@ -133,6 +137,7 @@ def dashboard(request):
             'max_monthly_count': max_monthly_count,
             'status_chart': status_chart,
             'max_status_count': max_status_count,
+            'upcoming_interviews': upcoming_interviews,
         }
     )
 
@@ -232,6 +237,105 @@ def application_detail(request, pk):
         request,
         'application/application_detail.html',
         {'job': job}
+    )
+
+
+@login_required
+def interview_list(request):
+    interviews = Interview.objects.filter(user=request.user).select_related('application')
+    now = timezone.now()
+
+    return render(
+        request,
+        'application/interview_list.html',
+        {
+            'upcoming_interviews': interviews.filter(scheduled_at__gte=now).order_by('scheduled_at'),
+            'past_interviews': interviews.filter(scheduled_at__lt=now).order_by('-scheduled_at'),
+        }
+    )
+
+
+@login_required
+def interview_create(request, application_pk):
+    application = get_object_or_404(
+        JobApplication,
+        pk=application_pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        form = InterviewForm(request.POST)
+
+        if form.is_valid():
+            interview = form.save(commit=False)
+            interview.user = request.user
+            interview.application = application
+            interview.save()
+
+            return redirect('application_detail', pk=application.pk)
+
+    else:
+        form = InterviewForm()
+
+    return render(
+        request,
+        'application/interview_form.html',
+        {
+            'form': form,
+            'application': application,
+        }
+    )
+
+
+@login_required
+def interview_update(request, pk):
+    interview = get_object_or_404(
+        Interview.objects.select_related('application'),
+        pk=pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        form = InterviewForm(request.POST, instance=interview)
+
+        if form.is_valid():
+            form.save()
+
+            return redirect('application_detail', pk=interview.application.pk)
+
+    else:
+        form = InterviewForm(instance=interview)
+
+    return render(
+        request,
+        'application/interview_form.html',
+        {
+            'form': form,
+            'application': interview.application,
+            'interview': interview,
+        }
+    )
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def interview_delete(request, pk):
+    interview = get_object_or_404(
+        Interview.objects.select_related('application'),
+        pk=pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        application_pk = interview.application.pk
+        interview.delete()
+
+        return redirect('application_detail', pk=application_pk)
+
+    return render(
+        request,
+        'application/interview_confirm_delete.html',
+        {'interview': interview}
     )
 
 

@@ -1,6 +1,6 @@
 from django import forms
 from django.utils import timezone
-from .models import JobApplication
+from .models import Interview, JobApplication
 
 
 class JobApplicationForm(forms.ModelForm):
@@ -86,3 +86,23 @@ class JobApplicationForm(forms.ModelForm):
             raise forms.ValidationError('Application date cannot be in the future.')
 
         return application_date
+
+
+class InterviewForm(forms.ModelForm):
+    class Meta:
+        model = Interview
+        fields = [
+            'interview_type',
+            'mode',
+            'scheduled_at',
+            'outcome',
+            'notes',
+        ]
+        widgets = {
+            'scheduled_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+        error_messages = {
+            'scheduled_at': {
+                'required': 'Interview date and time is required.',
+            },
+        }

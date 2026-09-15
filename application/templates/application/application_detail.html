@@ -80,8 +80,33 @@
 
         <div class="card-actions">
             <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
+            <a class="view-link" href="{% url 'interview_create' job.pk %}">Add Interview</a>
             <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
         </div>
+    </div>
+
+    <div class="job-card activity-card">
+        <h2>Interviews</h2>
+
+        {% for interview in job.interviews.all %}
+            <p>
+                <strong>{{ interview.get_interview_type_display }}</strong>
+                - {{ interview.get_mode_display }}
+                <span>{{ interview.scheduled_at }}</span>
+                {% if interview.outcome %}
+                    <span>{{ interview.outcome }}</span>
+                {% endif %}
+                {% if interview.notes %}
+                    <span>{{ interview.notes }}</span>
+                {% endif %}
+            </p>
+            <div class="card-actions">
+                <a class="edit-link" href="{% url 'interview_update' interview.pk %}">Edit</a>
+                <a class="delete-link" href="{% url 'interview_delete' interview.pk %}">Delete</a>
+            </div>
+        {% empty %}
+            <p>No interviews recorded yet.</p>
+        {% endfor %}
     </div>
 
     <div class="job-card activity-card">
