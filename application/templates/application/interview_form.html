@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Interview - {{ application.company }}</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Interview - {{ application.company }}{% endblock %}
+
+{% block content %}
 <div class="container">
     <h1>{% if interview %}Edit Interview{% else %}Add Interview{% endif %}</h1>
     <a class="back-link" href="{% url 'application_detail' application.pk %}">
@@ -35,6 +31,4 @@
         <button type="submit">Save Interview</button>
     </form>
 </div>
-
-</body>
-</html>
+{% endblock %}

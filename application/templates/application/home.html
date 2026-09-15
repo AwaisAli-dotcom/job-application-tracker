@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Job Application Tracker</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Job Application Tracker{% endblock %}
+
+{% block content %}
 <div class="container home-container">
     <section class="home-hero">
         <p class="home-kicker">Job Application Tracker</p>
@@ -38,6 +34,4 @@
         </div>
     </section>
 </div>
-
-</body>
-</html>
+{% endblock %}

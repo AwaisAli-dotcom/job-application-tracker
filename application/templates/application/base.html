@@ -1,0 +1,50 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}Job Application Tracker{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a class="site-brand" href="{% if user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'home' %}{% endif %}">
+            Job Application Tracker
+        </a>
+
+        <nav class="site-nav" aria-label="Main navigation">
+            {% if user.is_authenticated %}
+                <a href="{% url 'dashboard' %}">Dashboard</a>
+                <a href="{% url 'application_list' %}">Applications</a>
+                <a href="{% url 'kanban_board' %}">Kanban</a>
+                <a href="{% url 'interview_list' %}">Interviews</a>
+                <a href="{% url 'application_create' %}">Add</a>
+                <form method="POST" action="{% url 'logout' %}" class="site-logout-form">
+                    {% csrf_token %}
+                    <button type="submit">Log Out</button>
+                </form>
+            {% else %}
+                <a href="{% url 'home' %}">Home</a>
+                <a href="{% url 'login' %}">Log In</a>
+                <a href="{% url 'register' %}">Register</a>
+            {% endif %}
+        </nav>
+    </div>
+</header>
+
+{% if messages %}
+    <div class="container">
+        <div class="messages">
+            {% for message in messages %}
+                <p class="message message-{{ message.tags }}">{{ message }}</p>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+
+{% block content %}{% endblock %}
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

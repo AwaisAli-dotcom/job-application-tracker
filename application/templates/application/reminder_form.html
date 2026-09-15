@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Reminder - {{ application.company }}</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Reminder - {{ application.company }}{% endblock %}
+
+{% block content %}
 <div class="container">
     <h1>{% if reminder %}Edit Reminder{% else %}Add Reminder{% endif %}</h1>
     <a class="back-link" href="{% url 'application_detail' application.pk %}">
@@ -19,6 +15,4 @@
         <button type="submit">Save Reminder</button>
     </form>
 </div>
-
-</body>
-</html>
+{% endblock %}

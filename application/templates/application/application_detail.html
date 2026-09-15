@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ job.company }} - {{ job.job_title }}</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}{{ job.company }} - {{ job.job_title }}{% endblock %}
+
+{% block content %}
 <div class="container application-list-container">
     <a class="back-link" href="{% url 'application_list' %}">
         Back to Applications
@@ -202,6 +198,4 @@
         {% endfor %}
     </div>
 </div>
-
-</body>
-</html>
+{% endblock %}

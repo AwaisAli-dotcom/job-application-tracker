@@ -1,33 +1,17 @@
-{% load static %}
+{% extends 'application/base.html' %}
 
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Job Applications</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
+{% block title %}Job Applications{% endblock %}
 
-<body>
-
+{% block content %}
 <div class="container application-list-container">
 
     <div class="list-header">
         <div>
             <h1>My Job Applications</h1>
-            <div class="dashboard-nav">
-                <a href="{% url 'dashboard' %}">Dashboard</a>
-                <a href="{% url 'kanban_board' %}">Kanban</a>
-                <a href="{% url 'interview_list' %}">Interviews</a>
-            </div>
             <a class="add-button" href="{% url 'application_create' %}">
                 + Add Application
             </a>
         </div>
-
-        <form method="POST" action="{% url 'logout' %}" class="logout-form">
-            {% csrf_token %}
-            <button type="submit">Log Out</button>
-        </form>
     </div>
 
     <form method="GET" class="filter-form">
@@ -117,6 +101,4 @@
     {% endif %}
 
 </div>
-
-</body>
-</html>
+{% endblock %}

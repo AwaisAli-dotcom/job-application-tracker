@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Add Document - {{ application.company }}</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Add Document - {{ application.company }}{% endblock %}
+
+{% block content %}
 <div class="container">
     <h1>Add Document</h1>
     <a class="back-link" href="{% url 'application_detail' application.pk %}">
@@ -19,6 +15,4 @@
         <button type="submit">Save Document</button>
     </form>
 </div>
-
-</body>
-</html>
+{% endblock %}

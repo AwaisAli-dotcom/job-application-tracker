@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Delete Document</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Delete Document{% endblock %}
+
+{% block content %}
 <div class="container">
     <h1>Delete Document</h1>
     <a class="back-link" href="{% url 'application_detail' document.application.pk %}">
@@ -25,6 +21,4 @@
         </form>
     </div>
 </div>
-
-</body>
-</html>
+{% endblock %}

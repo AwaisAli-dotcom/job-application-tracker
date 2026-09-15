@@ -1,28 +1,10 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Kanban Board</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Kanban Board{% endblock %}
+
+{% block content %}
 <div class="container kanban-container">
-    <div class="list-header">
-        <div>
-            <h1>Kanban Board</h1>
-            <div class="dashboard-nav">
-                <a href="{% url 'dashboard' %}">Dashboard</a>
-                <a href="{% url 'application_list' %}">Applications</a>
-                <a href="{% url 'application_create' %}">Add Application</a>
-            </div>
-        </div>
-
-        <form method="POST" action="{% url 'logout' %}" class="logout-form">
-            {% csrf_token %}
-            <button type="submit">Log Out</button>
-        </form>
-    </div>
+    <h1>Kanban Board</h1>
 
     <div class="kanban-board">
         {% for column in columns %}
@@ -77,7 +59,9 @@
         {% endfor %}
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
     var draggedCard = null;
 
@@ -153,6 +137,4 @@
         });
     }
 </script>
-
-</body>
-</html>
+{% endblock %}

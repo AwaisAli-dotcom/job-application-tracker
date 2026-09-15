@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Delete Application</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Delete Application{% endblock %}
+
+{% block content %}
 <div class="container">
     <h1>Delete Job Application</h1>
 
@@ -33,6 +29,4 @@
         </form>
     </div>
 </div>
-
-</body>
-</html>
+{% endblock %}

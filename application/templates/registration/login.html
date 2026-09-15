@@ -1,12 +1,8 @@
-{% load static %}
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Log In</title>
-    <link rel="stylesheet" href="{% static 'application/style.css' %}">
-</head>
-<body>
+{% extends 'application/base.html' %}
 
+{% block title %}Log In{% endblock %}
+
+{% block content %}
 <div class="container auth-container">
     <h1>Log In</h1>
 
@@ -22,6 +18,4 @@
         <a href="{% url 'register' %}">Create an account</a>
     </p>
 </div>
-
-</body>
-</html>
+{% endblock %}
