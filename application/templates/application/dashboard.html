@@ -124,6 +124,23 @@
                 {% endfor %}
             </div>
         </section>
+
+        <section class="dashboard-panel">
+            <h2>Upcoming Reminders</h2>
+            <div class="interview-list">
+                {% for reminder in upcoming_reminders %}
+                    <div class="interview-item">
+                        <div>
+                            <strong>{{ reminder.title }}</strong>
+                            <span>{{ reminder.application.company }} - {{ reminder.due_at }}</span>
+                        </div>
+                        <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}">View</a>
+                    </div>
+                {% empty %}
+                    <p>No upcoming reminders.</p>
+                {% endfor %}
+            </div>
+        </section>
     {% else %}
         <div class="empty-state">
             <h2>No applications yet</h2>

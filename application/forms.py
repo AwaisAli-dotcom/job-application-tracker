@@ -1,6 +1,6 @@
 from django import forms
 from django.utils import timezone
-from .models import Interview, JobApplication
+from .models import ApplicationDocument, Interview, JobApplication, Reminder
 
 
 class JobApplicationForm(forms.ModelForm):
@@ -104,5 +104,52 @@ class InterviewForm(forms.ModelForm):
         error_messages = {
             'scheduled_at': {
                 'required': 'Interview date and time is required.',
+            },
+        }
+
+
+class ApplicationDocumentForm(forms.ModelForm):
+    class Meta:
+        model = ApplicationDocument
+        fields = [
+            'title',
+            'document_type',
+            'link',
+            'notes',
+        ]
+        labels = {
+            'link': 'Document link (optional)',
+        }
+        widgets = {
+            'link': forms.TextInput(),
+        }
+        error_messages = {
+            'title': {
+                'required': 'Document title is required.',
+            },
+            'link': {
+                'invalid': 'Enter a valid document link.',
+            },
+        }
+
+
+class ReminderForm(forms.ModelForm):
+    class Meta:
+        model = Reminder
+        fields = [
+            'title',
+            'due_at',
+            'completed',
+            'notes',
+        ]
+        widgets = {
+            'due_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+        error_messages = {
+            'title': {
+                'required': 'Reminder title is required.',
+            },
+            'due_at': {
+                'required': 'Reminder date and time is required.',
             },
         }

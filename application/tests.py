@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone as django_timezone
 
 from .forms import JobApplicationForm
-from .models import Interview, JobApplication, StatusHistory
+from .models import ApplicationDocument, Interview, JobApplication, Reminder, StatusHistory
 
 
 class AuthenticationTests(TestCase):
@@ -699,6 +699,232 @@ class InterviewTests(TestCase):
 
         self.assertContains(response, 'Upcoming')
         self.assertContains(response, 'Past')
+
+
+class DocumentReminderTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='metadatauser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='othermetadatauser',
+            password='testpass123'
+        )
+        self.application = JobApplication.objects.create(
+            user=self.user,
+            company='Metadata Company',
+            job_title='Python Developer',
+            status='applied'
+        )
+        self.other_application = JobApplication.objects.create(
+            user=self.other_user,
+            company='Hidden Metadata Company',
+            job_title='Secret Developer',
+            status='applied'
+        )
+        self.document = ApplicationDocument.objects.create(
+            user=self.user,
+            application=self.application,
+            title='CV Backend v2',
+            document_type='cv',
+            link='https://example.com/cv'
+        )
+        self.hidden_document = ApplicationDocument.objects.create(
+            user=self.other_user,
+            application=self.other_application,
+            title='Hidden CV',
+            document_type='cv'
+        )
+        self.reminder = Reminder.objects.create(
+            user=self.user,
+            application=self.application,
+            title='Follow up',
+            due_at=django_timezone.now() + timedelta(days=3)
+        )
+        self.hidden_reminder = Reminder.objects.create(
+            user=self.other_user,
+            application=self.other_application,
+            title='Hidden reminder',
+            due_at=django_timezone.now() + timedelta(days=3)
+        )
+
+    def document_form_data(self, **overrides):
+        data = {
+            'title': 'Cover Letter v1',
+            'document_type': 'cover_letter',
+            'link': 'https://example.com/cover-letter',
+            'notes': 'Tailored for the company.',
+        }
+        data.update(overrides)
+        return data
+
+    def reminder_form_data(self, **overrides):
+        data = {
+            'title': 'Send follow-up email',
+            'due_at': (django_timezone.now() + timedelta(days=5)).strftime('%Y-%m-%dT%H:%M'),
+            'completed': '',
+            'notes': 'Mention the technical interview.',
+        }
+        data.update(overrides)
+        return data
+
+    def test_owner_can_create_document_metadata(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data()
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.assertTrue(
+            ApplicationDocument.objects.filter(
+                user=self.user,
+                application=self.application,
+                title='Cover Letter v1'
+            ).exists()
+        )
+
+    def test_user_cannot_create_document_for_another_users_application(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(
+            reverse('document_create', args=[self.other_application.pk]),
+            self.document_form_data()
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            ApplicationDocument.objects.filter(
+                user=self.user,
+                application=self.other_application
+            ).exists()
+        )
+
+    def test_owner_can_delete_document_metadata(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(reverse('document_delete', args=[self.document.pk]))
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.assertFalse(ApplicationDocument.objects.filter(pk=self.document.pk).exists())
+
+    def test_user_cannot_delete_another_users_document(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(reverse('document_delete', args=[self.hidden_document.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(ApplicationDocument.objects.filter(pk=self.hidden_document.pk).exists())
+
+    def test_owner_can_create_reminder(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(
+            reverse('reminder_create', args=[self.application.pk]),
+            self.reminder_form_data()
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.assertTrue(
+            Reminder.objects.filter(
+                user=self.user,
+                application=self.application,
+                title='Send follow-up email'
+            ).exists()
+        )
+
+    def test_user_cannot_create_reminder_for_another_users_application(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(
+            reverse('reminder_create', args=[self.other_application.pk]),
+            self.reminder_form_data()
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            Reminder.objects.filter(
+                user=self.user,
+                application=self.other_application
+            ).exists()
+        )
+
+    def test_owner_can_update_reminder(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(
+            reverse('reminder_update', args=[self.reminder.pk]),
+            self.reminder_form_data(title='Updated follow-up')
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.reminder.refresh_from_db()
+        self.assertEqual(self.reminder.title, 'Updated follow-up')
+
+    def test_user_cannot_update_another_users_reminder(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(
+            reverse('reminder_update', args=[self.hidden_reminder.pk]),
+            self.reminder_form_data(title='Changed')
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.hidden_reminder.refresh_from_db()
+        self.assertEqual(self.hidden_reminder.title, 'Hidden reminder')
+
+    def test_owner_can_delete_reminder(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(reverse('reminder_delete', args=[self.reminder.pk]))
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.assertFalse(Reminder.objects.filter(pk=self.reminder.pk).exists())
+
+    def test_user_cannot_delete_another_users_reminder(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.post(reverse('reminder_delete', args=[self.hidden_reminder.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Reminder.objects.filter(pk=self.hidden_reminder.pk).exists())
+
+    def test_documents_and_reminders_appear_on_application_detail(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.get(reverse('application_detail', args=[self.application.pk]))
+
+        self.assertContains(response, 'CV Backend v2')
+        self.assertContains(response, 'Follow up')
+        self.assertNotContains(response, 'Hidden CV')
+        self.assertNotContains(response, 'Hidden reminder')
+
+    def test_dashboard_shows_upcoming_reminders(self):
+        self.client.login(username='metadatauser', password='testpass123')
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'Upcoming Reminders')
+        self.assertContains(response, 'Follow up')
+        self.assertNotContains(response, 'Hidden reminder')
 
 
 class JobApplicationSearchFilterTests(TestCase):

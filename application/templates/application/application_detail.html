@@ -81,6 +81,8 @@
         <div class="card-actions">
             <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
             <a class="view-link" href="{% url 'interview_create' job.pk %}">Add Interview</a>
+            <a class="view-link" href="{% url 'document_create' job.pk %}">Add Document</a>
+            <a class="view-link" href="{% url 'reminder_create' job.pk %}">Add Reminder</a>
             <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
         </div>
     </div>
@@ -106,6 +108,51 @@
             </div>
         {% empty %}
             <p>No interviews recorded yet.</p>
+        {% endfor %}
+    </div>
+
+    <div class="job-card activity-card">
+        <h2>Documents</h2>
+
+        {% for document in job.documents.all %}
+            <p>
+                <strong>{{ document.title }}</strong>
+                - {{ document.get_document_type_display }}
+                {% if document.link %}
+                    <span><a href="{{ document.link }}" target="_blank" rel="noopener noreferrer">{{ document.link }}</a></span>
+                {% endif %}
+                {% if document.notes %}
+                    <span>{{ document.notes }}</span>
+                {% endif %}
+            </p>
+            <div class="card-actions">
+                <a class="delete-link" href="{% url 'document_delete' document.pk %}">Delete</a>
+            </div>
+        {% empty %}
+            <p>No documents recorded yet.</p>
+        {% endfor %}
+    </div>
+
+    <div class="job-card activity-card">
+        <h2>Reminders</h2>
+
+        {% for reminder in job.reminders.all %}
+            <p>
+                <strong>{{ reminder.title }}</strong>
+                <span>{{ reminder.due_at }}</span>
+                {% if reminder.completed %}
+                    <span>Completed</span>
+                {% endif %}
+                {% if reminder.notes %}
+                    <span>{{ reminder.notes }}</span>
+                {% endif %}
+            </p>
+            <div class="card-actions">
+                <a class="edit-link" href="{% url 'reminder_update' reminder.pk %}">Edit</a>
+                <a class="delete-link" href="{% url 'reminder_delete' reminder.pk %}">Delete</a>
+            </div>
+        {% empty %}
+            <p>No reminders recorded yet.</p>
         {% endfor %}
     </div>
 

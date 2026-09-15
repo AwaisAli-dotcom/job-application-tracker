@@ -12,8 +12,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .models import Interview, JobApplication, StatusHistory
-from .forms import InterviewForm, JobApplicationForm
+from .models import ApplicationDocument, Interview, JobApplication, Reminder, StatusHistory
+from .forms import ApplicationDocumentForm, InterviewForm, JobApplicationForm, ReminderForm
 
 
 def home(request):
@@ -118,6 +118,11 @@ def dashboard(request):
         user=request.user,
         scheduled_at__gte=timezone.now()
     ).select_related('application').order_by('scheduled_at')[:5]
+    upcoming_reminders = Reminder.objects.filter(
+        user=request.user,
+        completed=False,
+        due_at__gte=timezone.now()
+    ).select_related('application').order_by('due_at')[:5]
 
     return render(
         request,
@@ -138,6 +143,7 @@ def dashboard(request):
             'status_chart': status_chart,
             'max_status_count': max_status_count,
             'upcoming_interviews': upcoming_interviews,
+            'upcoming_reminders': upcoming_reminders,
         }
     )
 
@@ -336,6 +342,144 @@ def interview_delete(request, pk):
         request,
         'application/interview_confirm_delete.html',
         {'interview': interview}
+    )
+
+
+@login_required
+def document_create(request, application_pk):
+    application = get_object_or_404(
+        JobApplication,
+        pk=application_pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        form = ApplicationDocumentForm(request.POST)
+
+        if form.is_valid():
+            document = form.save(commit=False)
+            document.user = request.user
+            document.application = application
+            document.save()
+
+            return redirect('application_detail', pk=application.pk)
+
+    else:
+        form = ApplicationDocumentForm()
+
+    return render(
+        request,
+        'application/document_form.html',
+        {
+            'form': form,
+            'application': application,
+        }
+    )
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def document_delete(request, pk):
+    document = get_object_or_404(
+        ApplicationDocument.objects.select_related('application'),
+        pk=pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        application_pk = document.application.pk
+        document.delete()
+
+        return redirect('application_detail', pk=application_pk)
+
+    return render(
+        request,
+        'application/document_confirm_delete.html',
+        {'document': document}
+    )
+
+
+@login_required
+def reminder_create(request, application_pk):
+    application = get_object_or_404(
+        JobApplication,
+        pk=application_pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        form = ReminderForm(request.POST)
+
+        if form.is_valid():
+            reminder = form.save(commit=False)
+            reminder.user = request.user
+            reminder.application = application
+            reminder.save()
+
+            return redirect('application_detail', pk=application.pk)
+
+    else:
+        form = ReminderForm()
+
+    return render(
+        request,
+        'application/reminder_form.html',
+        {
+            'form': form,
+            'application': application,
+        }
+    )
+
+
+@login_required
+def reminder_update(request, pk):
+    reminder = get_object_or_404(
+        Reminder.objects.select_related('application'),
+        pk=pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        form = ReminderForm(request.POST, instance=reminder)
+
+        if form.is_valid():
+            form.save()
+
+            return redirect('application_detail', pk=reminder.application.pk)
+
+    else:
+        form = ReminderForm(instance=reminder)
+
+    return render(
+        request,
+        'application/reminder_form.html',
+        {
+            'form': form,
+            'application': reminder.application,
+            'reminder': reminder,
+        }
+    )
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def reminder_delete(request, pk):
+    reminder = get_object_or_404(
+        Reminder.objects.select_related('application'),
+        pk=pk,
+        user=request.user
+    )
+
+    if request.method == 'POST':
+        application_pk = reminder.application.pk
+        reminder.delete()
+
+        return redirect('application_detail', pk=application_pk)
+
+    return render(
+        request,
+        'application/reminder_confirm_delete.html',
+        {'reminder': reminder}
     )
 
 

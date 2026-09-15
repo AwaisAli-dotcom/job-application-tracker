@@ -165,3 +165,63 @@ class Interview(models.Model):
 
     def __str__(self):
         return f"{self.application} interview on {self.scheduled_at}"
+
+
+class ApplicationDocument(models.Model):
+    DOCUMENT_TYPE_CHOICES = [
+        ('cv', 'CV'),
+        ('cover_letter', 'Cover Letter'),
+        ('portfolio', 'Portfolio'),
+        ('other', 'Other'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='application_documents'
+    )
+    application = models.ForeignKey(
+        JobApplication,
+        on_delete=models.CASCADE,
+        related_name='documents'
+    )
+    title = models.CharField(max_length=150)
+    document_type = models.CharField(
+        max_length=30,
+        choices=DOCUMENT_TYPE_CHOICES,
+        default='cv'
+    )
+    link = models.URLField(blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class Reminder(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='reminders'
+    )
+    application = models.ForeignKey(
+        JobApplication,
+        on_delete=models.CASCADE,
+        related_name='reminders'
+    )
+    title = models.CharField(max_length=150)
+    due_at = models.DateTimeField()
+    completed = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['completed', 'due_at']
+
+    def __str__(self):
+        return self.title

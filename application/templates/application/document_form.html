@@ -1,0 +1,24 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Document - {{ application.company }}</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container">
+    <h1>Add Document</h1>
+    <a class="back-link" href="{% url 'application_detail' application.pk %}">
+        Back to Application
+    </a>
+
+    <form method="POST" class="form-card">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Save Document</button>
+    </form>
+</div>
+
+</body>
+</html>
