@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
 
-from .models import JobApplication
+from .models import JobApplication, StatusHistory
 from .forms import JobApplicationForm
 
 
@@ -43,6 +43,18 @@ def register(request):
         request,
         'registration/register.html',
         {'form': form}
+    )
+
+
+def record_status_change(job, old_status, new_status):
+    if old_status == new_status:
+        return
+
+    StatusHistory.objects.create(
+        user=job.user,
+        application=job,
+        old_status=old_status,
+        new_status=new_status
     )
 
 
@@ -266,8 +278,10 @@ def update_application_status(request, pk):
             status=400
         )
 
+    old_status = job.status
     job.status = new_status
     job.save(update_fields=['status', 'updated_at'])
+    record_status_change(job, old_status, new_status)
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return JsonResponse(
@@ -312,10 +326,12 @@ def application_update(request, pk):
     )
 
     if request.method == 'POST':
+        old_status = job.status
         form = JobApplicationForm(request.POST, instance=job)
 
         if form.is_valid():
-            form.save()
+            job = form.save()
+            record_status_change(job, old_status, job.status)
 
             return redirect('application_list')
 

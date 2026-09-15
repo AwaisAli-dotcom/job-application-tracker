@@ -76,3 +76,33 @@ class JobApplication(models.Model):
 
     def __str__(self):
         return f"{self.company} - {self.job_title}"
+
+
+class StatusHistory(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='status_history'
+    )
+    application = models.ForeignKey(
+        JobApplication,
+        on_delete=models.CASCADE,
+        related_name='status_history'
+    )
+    old_status = models.CharField(
+        max_length=20,
+        choices=JobApplication.STATUS_CHOICES
+    )
+    new_status = models.CharField(
+        max_length=20,
+        choices=JobApplication.STATUS_CHOICES
+    )
+    changed_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.application} moved from {self.old_status} to {self.new_status}"

@@ -973,3 +973,19 @@ h1 {
     border-radius: 8px;
     text-align: center;
 }
+
+.activity-card {
+    margin-top: 16px;
+}
+
+.activity-card h2 {
+    margin-top: 0;
+    font-size: 18px;
+}
+
+.activity-card span {
+    display: block;
+    margin-top: 4px;
+    color: #667085;
+    font-size: 13px;
+}

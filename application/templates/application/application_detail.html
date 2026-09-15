@@ -83,6 +83,21 @@
             <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
         </div>
     </div>
+
+    <div class="job-card activity-card">
+        <h2>Status History</h2>
+
+        {% for item in job.status_history.all %}
+            <p>
+                <strong>{{ item.get_old_status_display }}</strong>
+                to
+                <strong>{{ item.get_new_status_display }}</strong>
+                <span>{{ item.changed_at }}</span>
+            </p>
+        {% empty %}
+            <p>No status changes recorded yet.</p>
+        {% endfor %}
+    </div>
 </div>
 
 </body>

@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone as django_timezone
 
 from .forms import JobApplicationForm
-from .models import JobApplication
+from .models import JobApplication, StatusHistory
 
 
 class AuthenticationTests(TestCase):
@@ -346,6 +346,23 @@ class JobApplicationDetailTests(TestCase):
         self.assertContains(response, '50000')
         self.assertContains(response, 'Prepare for technical interview.')
 
+    def test_status_history_appears_on_detail_page(self):
+        StatusHistory.objects.create(
+            user=self.owner,
+            application=self.application,
+            old_status='applied',
+            new_status='interview'
+        )
+        self.client.login(username='detailowner', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_detail', args=[self.application.pk])
+        )
+
+        self.assertContains(response, 'Status History')
+        self.assertContains(response, 'Applied')
+        self.assertContains(response, 'Interview')
+
     def test_nonexistent_application_detail_returns_404(self):
         self.client.login(username='detailowner', password='testpass123')
 
@@ -421,6 +438,14 @@ class JobApplicationKanbanTests(TestCase):
         )
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, 'interview')
+        self.assertTrue(
+            StatusHistory.objects.filter(
+                user=self.user,
+                application=self.application,
+                old_status='applied',
+                new_status='interview'
+            ).exists()
+        )
 
     def test_status_update_fallback_redirects_to_kanban(self):
         self.client.login(username='kanbanuser', password='testpass123')
@@ -433,6 +458,28 @@ class JobApplicationKanbanTests(TestCase):
         self.assertRedirects(response, reverse('kanban_board'))
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, 'technical_test')
+        self.assertTrue(
+            StatusHistory.objects.filter(
+                user=self.user,
+                application=self.application,
+                old_status='applied',
+                new_status='technical_test'
+            ).exists()
+        )
+
+    def test_same_status_update_does_not_create_history(self):
+        self.client.login(username='kanbanuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_status_update', args=[self.application.pk]),
+            {'status': 'applied'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            StatusHistory.objects.filter(application=self.application).exists()
+        )
 
     def test_invalid_status_is_rejected(self):
         self.client.login(username='kanbanuser', password='testpass123')
@@ -1123,6 +1170,24 @@ class JobApplicationFormValidationTests(TestCase):
         self.existing_application.refresh_from_db()
         self.assertEqual(self.existing_application.company, 'Original Company')
         self.assertEqual(self.existing_application.job_title, 'Original Title')
+
+    def test_valid_edit_status_change_creates_history(self):
+        self.client.login(username='formuser', password='testpass123')
+
+        response = self.client.post(
+            reverse('application_update', args=[self.existing_application.pk]),
+            self.valid_form_data(status='interview')
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        self.assertTrue(
+            StatusHistory.objects.filter(
+                user=self.user,
+                application=self.existing_application,
+                old_status='saved',
+                new_status='interview'
+            ).exists()
+        )
 
     def test_validation_does_not_weaken_edit_ownership(self):
         self.client.login(username='otherformuser', password='testpass123')
