@@ -1,0 +1,118 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container dashboard-container">
+    <div class="list-header">
+        <div>
+            <h1>Dashboard</h1>
+            <div class="dashboard-nav">
+                <a href="{% url 'application_list' %}">Applications</a>
+                <a href="{% url 'application_create' %}">Add Application</a>
+            </div>
+        </div>
+
+        <form method="POST" action="{% url 'logout' %}" class="logout-form">
+            {% csrf_token %}
+            <button type="submit">Log Out</button>
+        </form>
+    </div>
+
+    {% if total_applications %}
+        <section class="dashboard-summary">
+            <div class="metric-card">
+                <span>Total</span>
+                <strong>{{ total_applications }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>Submitted</span>
+                <strong>{{ submitted_count }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>Interviewing</span>
+                <strong>{{ interviews_count }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>Offers</span>
+                <strong>{{ offers_count }}</strong>
+            </div>
+            <div class="metric-card">
+                <span>Interview rate</span>
+                <strong>{{ interview_rate }}%</strong>
+            </div>
+            <div class="metric-card">
+                <span>Offer rate</span>
+                <strong>{{ offer_rate }}%</strong>
+            </div>
+        </section>
+
+        <section class="dashboard-grid">
+            <div class="dashboard-panel">
+                <h2>Applications by Month</h2>
+                <div class="bar-chart">
+                    {% for item in monthly_chart %}
+                        <div class="bar-row">
+                            <span>{{ item.label }}</span>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: {% widthratio item.count max_monthly_count 100 %}%"></div>
+                            </div>
+                            <strong>{{ item.count }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="dashboard-panel">
+                <h2>Status Breakdown</h2>
+                <div class="bar-chart">
+                    {% for item in status_chart %}
+                        <div class="bar-row">
+                            <span>{{ item.label }}</span>
+                            <div class="bar-track">
+                                <div class="bar-fill status-fill status-{{ item.value }}" style="width: {% widthratio item.count max_status_count 100 %}%"></div>
+                            </div>
+                            <strong>{{ item.count }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="dashboard-grid">
+            <div class="dashboard-panel">
+                <h2>Recent Activity</h2>
+                <div class="recent-list">
+                    {% for job in recent_applications %}
+                        <a href="{% url 'application_detail' job.pk %}">
+                            <span>{{ job.company }}</span>
+                            <strong>{{ job.get_status_display }}</strong>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="dashboard-panel">
+                <h2>Pipeline</h2>
+                <div class="pipeline-list">
+                    <p><strong>{{ active_count }}</strong> active applications</p>
+                    <p><strong>{{ rejected_count }}</strong> rejected applications</p>
+                    <p><strong>{{ withdrawn_count }}</strong> withdrawn applications</p>
+                </div>
+            </div>
+        </section>
+    {% else %}
+        <div class="empty-state">
+            <h2>No applications yet</h2>
+            <p>Add your first job application to start seeing dashboard metrics.</p>
+            <a class="add-button" href="{% url 'application_create' %}">+ Add Application</a>
+        </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

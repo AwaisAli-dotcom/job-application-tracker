@@ -1,0 +1,43 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Application Tracker</title>
+    <link rel="stylesheet" href="{% static 'application/style.css' %}">
+</head>
+<body>
+
+<div class="container home-container">
+    <section class="home-hero">
+        <p class="home-kicker">Job Application Tracker</p>
+        <h1>Track every job application in one private workspace.</h1>
+        <p>
+            Save roles, follow their progress, prepare for interviews, and see how your job search is moving.
+        </p>
+
+        <div class="home-actions">
+            <a class="add-button" href="{% url 'register' %}">Create account</a>
+            <a class="view-link" href="{% url 'login' %}">Log in</a>
+        </div>
+    </section>
+
+    <section class="home-feature-grid">
+        <div class="home-feature">
+            <h2>Track</h2>
+            <p>Record companies, roles, status, dates, salary notes, and links.</p>
+        </div>
+
+        <div class="home-feature">
+            <h2>Organize</h2>
+            <p>Use search, filters, sorting, and pagination to find the right record quickly.</p>
+        </div>
+
+        <div class="home-feature">
+            <h2>Analyze</h2>
+            <p>Review dashboard metrics and recent activity to understand your progress.</p>
+        </div>
+    </section>
+</div>
+
+</body>
+</html>

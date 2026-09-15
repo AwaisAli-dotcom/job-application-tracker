@@ -1,18 +1,29 @@
+from collections import Counter
+from datetime import date
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from .models import JobApplication
 from .forms import JobApplicationForm
 
 
+def home(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    return render(request, 'application/home.html')
+
+
 def register(request):
     if request.user.is_authenticated:
-        return redirect('application_list')
+        return redirect('dashboard')
 
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
@@ -21,7 +32,7 @@ def register(request):
             user = form.save()
             login(request, user)
 
-            return redirect('application_list')
+            return redirect('dashboard')
 
     else:
         form = UserCreationForm()
@@ -30,6 +41,85 @@ def register(request):
         request,
         'registration/register.html',
         {'form': form}
+    )
+
+
+@login_required
+def dashboard(request):
+    applications = JobApplication.objects.filter(user=request.user)
+    submitted_applications = applications.exclude(status='saved')
+    interviewing_statuses = ['interview', 'technical_test']
+    active_statuses = ['saved', 'applied', 'interview', 'technical_test', 'offer']
+
+    total_applications = applications.count()
+    submitted_count = submitted_applications.count()
+    interviews_count = applications.filter(status__in=interviewing_statuses).count()
+    offers_count = applications.filter(status='offer').count()
+    active_count = applications.filter(status__in=active_statuses).count()
+    rejected_count = applications.filter(status='rejected').count()
+    withdrawn_count = applications.filter(status='withdrawn').count()
+    interview_rate = round((interviews_count / submitted_count) * 100) if submitted_count else 0
+    offer_rate = round((offers_count / submitted_count) * 100) if submitted_count else 0
+
+    current_month = timezone.localdate().replace(day=1)
+    month_starts = []
+    year = current_month.year
+    month = current_month.month
+
+    for _ in range(6):
+        month_starts.append(date(year, month, 1))
+        month -= 1
+
+        if month == 0:
+            month = 12
+            year -= 1
+
+    month_starts.reverse()
+    month_counts = Counter(
+        application_date.replace(day=1)
+        for application_date in applications.exclude(application_date__isnull=True)
+        .values_list('application_date', flat=True)
+    )
+    monthly_chart = [
+        {
+            'label': month_start.strftime('%b %Y'),
+            'count': month_counts.get(month_start, 0),
+        }
+        for month_start in month_starts
+    ]
+    max_monthly_count = max([item['count'] for item in monthly_chart] + [1])
+
+    status_counts = applications.values_list('status', flat=True)
+    status_counter = Counter(status_counts)
+    status_chart = [
+        {
+            'value': value,
+            'label': label,
+            'count': status_counter.get(value, 0),
+        }
+        for value, label in JobApplication.STATUS_CHOICES
+    ]
+    max_status_count = max([item['count'] for item in status_chart] + [1])
+
+    return render(
+        request,
+        'application/dashboard.html',
+        {
+            'total_applications': total_applications,
+            'submitted_count': submitted_count,
+            'interviews_count': interviews_count,
+            'offers_count': offers_count,
+            'active_count': active_count,
+            'rejected_count': rejected_count,
+            'withdrawn_count': withdrawn_count,
+            'interview_rate': interview_rate,
+            'offer_rate': offer_rate,
+            'recent_applications': applications.order_by('-updated_at')[:5],
+            'monthly_chart': monthly_chart,
+            'max_monthly_count': max_monthly_count,
+            'status_chart': status_chart,
+            'max_status_count': max_status_count,
+        }
     )
 
 

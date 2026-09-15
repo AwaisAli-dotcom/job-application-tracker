@@ -41,7 +41,7 @@ class AuthenticationTests(TestCase):
             }
         )
 
-        self.assertRedirects(response, reverse('application_list'))
+        self.assertRedirects(response, reverse('dashboard'))
         self.assertEqual(
             int(self.client.session['_auth_user_id']),
             self.user.pk
@@ -72,7 +72,7 @@ class AuthenticationTests(TestCase):
 
         User = get_user_model()
         new_user = User.objects.get(username='newuser')
-        self.assertRedirects(response, reverse('application_list'))
+        self.assertRedirects(response, reverse('dashboard'))
         self.assertTrue(new_user.check_password('StrongPass12345!'))
         self.assertEqual(
             int(self.client.session['_auth_user_id']),
@@ -110,6 +110,95 @@ class AuthenticationTests(TestCase):
 
         self.assertContains(response, self.user_application.company)
         self.assertNotContains(response, self.other_application.company)
+
+
+class DashboardTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='dashboarduser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='otherdashboarduser',
+            password='testpass123'
+        )
+        today = django_timezone.localdate()
+        JobApplication.objects.create(
+            user=self.user,
+            company='Saved Company',
+            job_title='Saved Role',
+            status='saved'
+        )
+        JobApplication.objects.create(
+            user=self.user,
+            company='Interview Company',
+            job_title='Interview Role',
+            status='interview',
+            application_date=today
+        )
+        JobApplication.objects.create(
+            user=self.user,
+            company='Offer Company',
+            job_title='Offer Role',
+            status='offer',
+            application_date=today
+        )
+        JobApplication.objects.create(
+            user=self.other_user,
+            company='Hidden Dashboard Company',
+            job_title='Hidden Role',
+            status='offer',
+            application_date=today
+        )
+
+    def test_home_page_is_public(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Job Application Tracker')
+
+    def test_authenticated_home_redirects_to_dashboard(self):
+        self.client.login(username='dashboarduser', password='testpass123')
+
+        response = self.client.get(reverse('home'))
+
+        self.assertRedirects(response, reverse('dashboard'))
+
+    def test_anonymous_dashboard_redirects_to_login(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('dashboard')}"
+        )
+
+    def test_dashboard_counts_current_users_applications(self):
+        self.client.login(username='dashboarduser', password='testpass123')
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['total_applications'], 3)
+        self.assertEqual(response.context['submitted_count'], 2)
+        self.assertEqual(response.context['interviews_count'], 1)
+        self.assertEqual(response.context['offers_count'], 1)
+        self.assertEqual(response.context['interview_rate'], 50)
+        self.assertEqual(response.context['offer_rate'], 50)
+        self.assertContains(response, 'Interview Company')
+        self.assertNotContains(response, 'Hidden Dashboard Company')
+
+    def test_empty_dashboard_has_helpful_empty_state(self):
+        empty_user = get_user_model().objects.create_user(
+            username='emptydashboarduser',
+            password='testpass123'
+        )
+        self.client.force_login(empty_user)
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'No applications yet')
 
 
 class JobApplicationDeleteTests(TestCase):
