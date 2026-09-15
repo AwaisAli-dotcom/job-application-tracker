@@ -370,28 +370,36 @@ class JobApplicationSearchFilterTests(TestCase):
             company='Google',
             job_title='Software Engineer',
             location='London',
-            status='applied'
+            employment_type='full_time',
+            status='applied',
+            application_date='2026-09-01'
         )
         self.amazon = JobApplication.objects.create(
             user=self.user,
             company='Amazon',
             job_title='Backend Developer',
             location='Manchester',
-            status='interview'
+            employment_type='contract',
+            status='interview',
+            application_date='2026-09-10'
         )
         self.remote_saved = JobApplication.objects.create(
             user=self.user,
             company='Remote Works',
             job_title='Product Analyst',
             location='Remote',
-            status='saved'
+            employment_type='part_time',
+            status='saved',
+            application_date='2026-09-15'
         )
         self.hidden = JobApplication.objects.create(
             user=self.other_user,
             company='Hidden Google',
             job_title='Developer Advocate',
             location='Remote',
-            status='interview'
+            employment_type='contract',
+            status='interview',
+            application_date='2026-09-10'
         )
 
     def test_search_by_company(self):
@@ -450,6 +458,71 @@ class JobApplicationSearchFilterTests(TestCase):
         self.assertContains(response, self.amazon.company)
         self.assertNotContains(response, self.google.company)
         self.assertNotContains(response, self.remote_saved.company)
+
+    def test_filter_by_employment_type(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'employment_type': 'contract'}
+        )
+
+        self.assertContains(response, self.amazon.company)
+        self.assertNotContains(response, self.google.company)
+        self.assertNotContains(response, self.hidden.company)
+
+    def test_filter_by_date_from(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'date_from': '2026-09-09'}
+        )
+
+        self.assertContains(response, self.amazon.company)
+        self.assertContains(response, self.remote_saved.company)
+        self.assertNotContains(response, self.google.company)
+
+    def test_filter_by_date_to(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'date_to': '2026-09-09'}
+        )
+
+        self.assertContains(response, self.google.company)
+        self.assertNotContains(response, self.amazon.company)
+
+    def test_search_status_type_and_date_filters_work_together(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {
+                'search': 'developer',
+                'status': 'interview',
+                'employment_type': 'contract',
+                'date_from': '2026-09-01',
+                'date_to': '2026-09-30',
+            }
+        )
+
+        self.assertContains(response, self.amazon.company)
+        self.assertNotContains(response, self.google.company)
+        self.assertNotContains(response, self.hidden.company)
+
+    def test_invalid_employment_type_filter_is_ignored(self):
+        self.client.login(username='searchuser', password='testpass123')
+
+        response = self.client.get(
+            reverse('application_list'),
+            {'employment_type': 'not-real'}
+        )
+
+        self.assertContains(response, self.google.company)
+        self.assertContains(response, self.amazon.company)
+        self.assertContains(response, self.remote_saved.company)
 
     def test_no_query_shows_all_current_users_applications(self):
         self.client.login(username='searchuser', password='testpass123')
@@ -658,7 +731,9 @@ class JobApplicationPaginationTests(TestCase):
                 company=f'Page Company {number:02}',
                 job_title='Backend Developer',
                 location='Remote',
-                status='interview' if number <= 11 else 'saved'
+                employment_type='contract',
+                status='interview' if number <= 11 else 'saved',
+                application_date=f'2026-09-{number:02}'
             )
             JobApplication.objects.filter(pk=application.pk).update(
                 created_at=datetime(2026, 9, number, tzinfo=timezone.utc),
@@ -667,11 +742,13 @@ class JobApplicationPaginationTests(TestCase):
 
         cls.hidden = JobApplication.objects.create(
             user=cls.other_user,
-            company='Hidden Page Company',
-            job_title='Backend Developer',
-            location='Remote',
-            status='interview'
-        )
+                company='Hidden Page Company',
+                job_title='Backend Developer',
+                location='Remote',
+                employment_type='contract',
+                status='interview',
+                application_date='2026-09-13'
+            )
         JobApplication.objects.filter(pk=cls.hidden.pk).update(
             created_at=datetime(2026, 9, 13, tzinfo=timezone.utc),
             updated_at=datetime(2026, 9, 13, tzinfo=timezone.utc)
@@ -712,6 +789,19 @@ class JobApplicationPaginationTests(TestCase):
 
         self.assertContains(response, 'status=interview&amp;page=2')
 
+    def test_employment_type_filter_is_preserved_across_pages(self):
+        response = self.get_list({'employment_type': 'contract'})
+
+        self.assertContains(response, 'employment_type=contract&amp;page=2')
+
+    def test_date_filters_are_preserved_across_pages(self):
+        response = self.get_list({
+            'date_from': '2026-09-01',
+            'date_to': '2026-09-11',
+        })
+
+        self.assertContains(response, 'date_from=2026-09-01&amp;date_to=2026-09-11&amp;page=2')
+
     def test_sorting_is_preserved_across_pages(self):
         response = self.get_list({'sort': 'oldest'})
 
@@ -721,6 +811,9 @@ class JobApplicationPaginationTests(TestCase):
         response = self.get_list({
             'search': 'Developer',
             'status': 'interview',
+            'employment_type': 'contract',
+            'date_from': '2026-09-01',
+            'date_to': '2026-09-11',
             'sort': 'oldest',
             'page': 2,
         })
@@ -729,7 +822,7 @@ class JobApplicationPaginationTests(TestCase):
         self.assertEqual(companies, ['Page Company 11'])
         self.assertContains(
             response,
-            'search=Developer&amp;status=interview&amp;sort=oldest&amp;page=1'
+            'search=Developer&amp;status=interview&amp;employment_type=contract&amp;date_from=2026-09-01&amp;date_to=2026-09-11&amp;sort=oldest&amp;page=1'
         )
 
     def test_invalid_page_values_do_not_crash(self):

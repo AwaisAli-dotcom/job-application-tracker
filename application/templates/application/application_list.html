@@ -40,6 +40,18 @@
             {% endfor %}
         </select>
 
+        <select name="employment_type" onchange="this.form.submit()">
+            <option value="">All types</option>
+            {% for value, label in employment_type_choices %}
+                <option value="{{ value }}" {% if selected_employment_type == value %}selected{% endif %}>
+                    {{ label }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <input type="date" name="date_from" value="{{ date_from }}" aria-label="Application date from">
+        <input type="date" name="date_to" value="{{ date_to }}" aria-label="Application date to">
+
         <select name="sort" onchange="this.form.submit()">
             {% for value, label in sort_choices %}
                 <option value="{{ value }}" {% if selected_sort == value %}selected{% endif %}>

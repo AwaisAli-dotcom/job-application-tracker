@@ -8,6 +8,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods
 
 from .models import JobApplication
@@ -129,7 +130,11 @@ def application_list(request):
     has_applications = applications.exists()
     search = request.GET.get('search', '').strip()
     selected_status = request.GET.get('status', '').strip()
+    selected_employment_type = request.GET.get('employment_type', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
     valid_statuses = [value for value, label in JobApplication.STATUS_CHOICES]
+    valid_employment_types = [value for value, label in JobApplication.JOB_TYPE_CHOICES]
     selected_sort = request.GET.get('sort', 'newest').strip() or 'newest'
     sort_choices = [
         ('newest', 'Newest first'),
@@ -161,6 +166,18 @@ def application_list(request):
     if selected_status in valid_statuses:
         applications = applications.filter(status=selected_status)
 
+    if selected_employment_type in valid_employment_types:
+        applications = applications.filter(employment_type=selected_employment_type)
+
+    parsed_date_from = parse_date(date_from) if date_from else None
+    parsed_date_to = parse_date(date_to) if date_to else None
+
+    if parsed_date_from:
+        applications = applications.filter(application_date__gte=parsed_date_from)
+
+    if parsed_date_to:
+        applications = applications.filter(application_date__lte=parsed_date_to)
+
     applications = applications.order_by(sort_options[selected_sort])
     paginator = Paginator(applications, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -179,8 +196,12 @@ def application_list(request):
             'page_prefix': page_prefix,
             'search': search,
             'selected_status': selected_status,
+            'selected_employment_type': selected_employment_type,
+            'date_from': date_from,
+            'date_to': date_to,
             'selected_sort': selected_sort,
             'status_choices': JobApplication.STATUS_CHOICES,
+            'employment_type_choices': JobApplication.JOB_TYPE_CHOICES,
             'sort_choices': sort_choices,
         }
     )
