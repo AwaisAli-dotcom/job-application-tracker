@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinLengthValidator
 
 
 class JobApplication(models.Model):
@@ -36,8 +37,18 @@ class JobApplication(models.Model):
         related_name='job_applications'
     )
 
-    company = models.CharField(max_length=150)
-    job_title = models.CharField(max_length=150)
+    company = models.CharField(
+        max_length=120,
+        validators=[
+            MinLengthValidator(2, 'Company name must be at least 2 characters.'),
+        ],
+    )
+    job_title = models.CharField(
+        max_length=160,
+        validators=[
+            MinLengthValidator(2, 'Job title must be at least 2 characters.'),
+        ],
+    )
 
     location = models.CharField(
         max_length=150,

@@ -387,6 +387,16 @@ class ModelValidationTests(TestCase):
         with self.assertRaises(ValidationError):
             self.application.full_clean()
 
+    def test_model_rejects_one_character_company_and_job_title(self):
+        self.application.company = 'A'
+        self.application.job_title = 'B'
+
+        with self.assertRaises(ValidationError) as error:
+            self.application.full_clean()
+
+        self.assertIn('company', error.exception.message_dict)
+        self.assertIn('job_title', error.exception.message_dict)
+
     def test_database_rejects_negative_salary(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
             JobApplication.objects.create(
@@ -1789,6 +1799,12 @@ class JobApplicationFormValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors['company'], ['Company name is required.'])
 
+    def test_one_character_company_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(company='A'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['company'], ['Company name must be at least 2 characters.'])
+
     def test_empty_job_title_rejected(self):
         form = JobApplicationForm(data=self.valid_form_data(job_title=''))
 
@@ -1800,6 +1816,12 @@ class JobApplicationFormValidationTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors['job_title'], ['Job title is required.'])
+
+    def test_one_character_job_title_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(job_title='B'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['job_title'], ['Job title must be at least 2 characters.'])
 
     def test_blank_location_rejected(self):
         form = JobApplicationForm(data=self.valid_form_data(location=''))
