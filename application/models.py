@@ -1,7 +1,29 @@
+from urllib.parse import urlsplit
+
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinLengthValidator
+from django.utils import timezone
+
+
+def validate_company_name(value):
+    value = value.strip()
+
+    if not value:
+        raise ValidationError('Company name is required.')
+
+    if len(value) < 2:
+        raise ValidationError('Company name must be at least 2 characters.')
+
+
+def validate_job_title(value):
+    value = value.strip()
+
+    if not value:
+        raise ValidationError('Job title is required.')
+
+    if len(value) < 2:
+        raise ValidationError('Job title must be at least 2 characters.')
 
 
 class JobApplication(models.Model):
@@ -39,15 +61,11 @@ class JobApplication(models.Model):
 
     company = models.CharField(
         max_length=120,
-        validators=[
-            MinLengthValidator(2, 'Company name must be at least 2 characters.'),
-        ],
+        validators=[validate_company_name],
     )
     job_title = models.CharField(
         max_length=160,
-        validators=[
-            MinLengthValidator(2, 'Job title must be at least 2 characters.'),
-        ],
+        validators=[validate_job_title],
     )
 
     location = models.CharField(
@@ -108,7 +126,10 @@ class JobApplication(models.Model):
 
     application_date = models.DateField(
         null=True,
-        blank=True
+        blank=False,
+        error_messages={
+            'blank': 'Application date is required.',
+        },
     )
 
     deadline = models.DateField(
@@ -159,6 +180,15 @@ class JobApplication(models.Model):
     def clean(self):
         super().clean()
         errors = {}
+
+        self.company = (self.company or '').strip()
+        self.job_title = (self.job_title or '').strip()
+
+        if self.job_url and urlsplit(self.job_url).scheme.lower() not in {'http', 'https'}:
+            errors['job_url'] = 'Enter a valid job URL using http:// or https://.'
+
+        if self.application_date and self.application_date > timezone.localdate():
+            errors['application_date'] = 'Application date cannot be in the future.'
 
         if self.salary_min is not None and self.salary_min < 0:
             errors['salary_min'] = 'Salary minimum cannot be negative.'

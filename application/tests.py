@@ -374,6 +374,7 @@ class ModelValidationTests(TestCase):
             user=self.user,
             company='Model Company',
             job_title='Engineer',
+            application_date=django_timezone.localdate(),
         )
 
     def test_application_defaults_and_string_representation(self):
@@ -396,6 +397,40 @@ class ModelValidationTests(TestCase):
 
         self.assertIn('company', error.exception.message_dict)
         self.assertIn('job_title', error.exception.message_dict)
+
+    def test_model_rejects_whitespace_only_names(self):
+        self.application.company = '   '
+        self.application.job_title = '   '
+
+        with self.assertRaises(ValidationError) as error:
+            self.application.full_clean()
+
+        self.assertIn('company', error.exception.message_dict)
+        self.assertIn('job_title', error.exception.message_dict)
+
+    def test_model_rejects_non_http_job_url(self):
+        self.application.job_url = 'ftp://example.com/job'
+
+        with self.assertRaises(ValidationError) as error:
+            self.application.full_clean()
+
+        self.assertIn('job_url', error.exception.message_dict)
+
+    def test_model_requires_application_date(self):
+        self.application.application_date = None
+
+        with self.assertRaises(ValidationError) as error:
+            self.application.full_clean()
+
+        self.assertIn('application_date', error.exception.message_dict)
+
+    def test_model_rejects_future_application_date(self):
+        self.application.application_date = django_timezone.localdate() + timedelta(days=1)
+
+        with self.assertRaises(ValidationError) as error:
+            self.application.full_clean()
+
+        self.assertIn('application_date', error.exception.message_dict)
 
     def test_database_rejects_negative_salary(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -634,14 +669,16 @@ class JobApplicationKanbanTests(TestCase):
             company='Kanban Company',
             job_title='Python Developer',
             location='Remote',
-            status='applied'
+            status='applied',
+            application_date=django_timezone.localdate(),
         )
         self.hidden_application = JobApplication.objects.create(
             user=self.other_user,
             company='Hidden Kanban Company',
             job_title='Secret Developer',
             location='Remote',
-            status='interview'
+            status='interview',
+            application_date=django_timezone.localdate(),
         )
 
     def test_owner_can_view_kanban_board(self):
@@ -740,6 +777,30 @@ class JobApplicationKanbanTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, 'applied')
+
+    def test_submitted_status_requires_application_date(self):
+        saved_application = JobApplication.objects.create(
+            user=self.user,
+            company='Saved Company',
+            job_title='Saved Role',
+            status='saved',
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('application_status_update', args=[saved_application.pk]),
+            {'status': 'applied'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertJSONEqual(
+            response.content,
+            {'ok': False, 'error': 'Application date is required.'},
+        )
+        saved_application.refresh_from_db()
+        self.assertEqual(saved_application.status, 'saved')
+        self.assertFalse(StatusHistory.objects.filter(application=saved_application).exists())
 
     def test_get_status_update_is_rejected(self):
         self.client.login(username='kanbanuser', password='testpass123')

@@ -6,6 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.db import transaction
@@ -712,11 +713,21 @@ def update_application_status(request, pk):
             status=400
         )
 
-    with transaction.atomic():
-        old_status = job.status
-        job.status = new_status
-        job.save(update_fields=['status', 'updated_at'])
-        record_status_change(job, old_status, new_status)
+    try:
+        with transaction.atomic():
+            old_status = job.status
+            job.status = new_status
+            job.full_clean()
+            job.save(update_fields=['status', 'updated_at'])
+            record_status_change(job, old_status, new_status)
+    except ValidationError as error:
+        error_message = next(iter(error.message_dict.values()))[0]
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'ok': False, 'error': error_message}, status=400)
+
+        messages.error(request, error_message)
+        return redirect('kanban_board')
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return JsonResponse(
