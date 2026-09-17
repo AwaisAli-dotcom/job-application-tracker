@@ -1,10 +1,10 @@
 {% extends 'application/base.html' %}
 
-{% block title %}Application Form{% endblock %}
+{% block title %}{% if job %}Edit Application{% else %}Add Application{% endif %}{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h1>Add Job Application</h1>
+    <h1>{% if job %}Edit Job Application{% else %}Add Job Application{% endif %}</h1>
     <a class="back-link" href="{% url 'application_list' %}">
     Back to Applications
 </a>
@@ -28,7 +28,7 @@
             </div>
         {% endfor %}
 
-        <button type="submit">Save Application</button>
+        <button type="submit">{% if job %}Save Changes{% else %}Save Application{% endif %}</button>
     </form>
 </div>
 {% endblock %}

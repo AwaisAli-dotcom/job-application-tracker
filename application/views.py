@@ -13,6 +13,7 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.csrf import requires_csrf_token
 
 from .models import ApplicationDocument, Interview, JobApplication, Reminder, StatusHistory
 from .forms import (
@@ -38,6 +39,11 @@ def about(request):
 
 def privacy(request):
     return render(request, 'application/privacy.html')
+
+
+@requires_csrf_token
+def csrf_failure(request, reason=''):
+    return render(request, '403.html', status=403)
 
 
 def register(request):
@@ -774,7 +780,7 @@ def application_update(request, pk):
     return render(
         request,
         'application/application_form.html',
-        {'form': form}
+        {'form': form, 'job': job}
     )
 
 

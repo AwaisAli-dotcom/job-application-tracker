@@ -1,20 +1,25 @@
 # Job Application Tracker
 
-A private Django web app for tracking job applications from saved roles through applications, interviews, offers, rejections, and withdrawals.
+A private Django web app for tracking job applications from saved roles through interviews, offers, rejections, and withdrawals. Each user's applications and related records are protected by server-side ownership checks.
 
 ## Features
 
-- User registration, login, and POST logout
+- Public home, About, and Privacy pages
+- Email-aware registration, login, POST logout, and account profile editing
 - User-owned job applications with create, list, detail, edit, and delete workflows
 - Search by company, title, and location
 - Filters by status, employment type, and application date range
 - Sorting and pagination with query parameter preservation
-- Dashboard metrics, status breakdown, monthly activity, recent applications, and upcoming interviews
-- Kanban board with secure status updates and dropdown fallback
+- User-scoped CSV export with spreadsheet-formula protection
+- Dashboard metrics, response/interview/offer rates, monthly activity, recent applications, deadlines, interviews, and reminders
+- Kanban board with secure drag-and-drop status updates and an accessible dropdown fallback
 - Status history timeline
-- Interview tracking with upcoming and past interview views
+- Interview rounds with schedule, mode, interviewer, location/link, outcome, and notes
+- Document-link/version metadata and in-app reminders
+- Work mode, source, structured salary range, currency, and deadline fields
 - Friendly form validation and compact inline errors
-- Automated tests for authentication, ownership, CRUD, filters, dashboard, Kanban, status history, and interviews
+- Friendly 403, 404, and 500 pages
+- Automated tests for authentication, ownership, CRUD, filters, dashboard, Kanban, exports, related records, validation, and database constraints
 
 ## Tech Stack
 
@@ -82,7 +87,10 @@ http://127.0.0.1:8000/
 - `DATABASE_URL`: PostgreSQL URL for production. Leave blank locally to use SQLite.
 - `SECURE_SSL_REDIRECT`: Usually `True` in production.
 - `SECURE_HSTS_SECONDS`: HSTS duration for HTTPS production deployments.
+- `SECURE_HSTS_INCLUDE_SUBDOMAINS`: Whether HSTS includes subdomains.
+- `SECURE_HSTS_PRELOAD`: Whether the domain is eligible for browser preload lists.
 - `EMAIL_BACKEND`: SMTP or another production email backend when `DEBUG=False`.
+- `LOG_LEVEL`: Console logging level, such as `INFO` or `WARNING`.
 
 ## Running Tests
 
@@ -112,6 +120,7 @@ Production should use:
 - HTTPS
 - Secure cookies
 - Collected static files
+- Console logging connected to the host's log collector
 
 Collect static files:
 
@@ -125,21 +134,52 @@ Typical production command:
 gunicorn config.wsgi:application
 ```
 
+A normal release should run these commands before starting the web process:
+
+```text
+python manage.py migrate
+python manage.py collectstatic --noinput
+python manage.py check --deploy
+```
+
+The final host must provide HTTPS, PostgreSQL credentials, the deployed host name, and the trusted HTTPS origin.
+
+## Security Model
+
+- Private views require authentication.
+- Every application lookup includes the current user.
+- Interview, document, reminder, history, dashboard, Kanban, and export queries are user-scoped.
+- Delete and status-changing actions require POST and Django CSRF protection.
+- Passwords use Django's authentication system and are never stored as raw text.
+- Secrets, SQLite data, virtual environments, collected static files, and uploads are ignored by Git.
+
 ## Project Structure
 
 ```text
 config/          Django project settings and URL configuration
-application/     Main app: models, forms, views, tests, templates, static CSS
+application/     Models, forms, views, tests, migrations, templates, and static CSS
 requirements.txt Python dependencies
 .env.example     Safe environment variable template
+Procfile         Provider-neutral Gunicorn web process command
 ```
+
+## Main URLs
+
+- `/` - public home
+- `/accounts/register/` - registration
+- `/accounts/login/` - login
+- `/dashboard/` - private dashboard
+- `/applications/` - searchable application list and CSV export
+- `/applications/kanban/` - status workflow board
+- `/interviews/` - upcoming and past interview rounds
+- `/admin/` - Django administration
 
 ## Screenshots
 
-Screenshots or a short demo GIF can be added here after final visual review.
+Add repository screenshots or a short demo GIF after the final visual review, using only demo data. Do not capture real job-search notes, private links, or credentials.
 
 ## Known Limitations
 
-- Live deployment requires selecting a hosting provider and setting real production environment variables.
-- Document tracking and reminders are planned next portfolio upgrades.
-- Actual file uploads are not enabled yet; this avoids storing private user files locally before production storage is chosen.
+- A live deployment requires a hosting account, PostgreSQL service, domain/host settings, and HTTPS configuration.
+- Document tracking stores secure metadata and optional links. Binary uploads are intentionally disabled until private object storage is selected.
+- Email reminders, OAuth, AI features, and a separate API are optional future work rather than MVP requirements.

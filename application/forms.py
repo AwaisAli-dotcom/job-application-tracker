@@ -1,11 +1,21 @@
+from urllib.parse import urlsplit
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
+
 from .models import ApplicationDocument, Interview, JobApplication, Reminder
 
 
 User = get_user_model()
+
+
+def validate_http_url(value, message):
+    if value and urlsplit(value).scheme.lower() not in {'http', 'https'}:
+        raise forms.ValidationError(message)
+
+    return value
 
 
 class RegistrationForm(UserCreationForm):
@@ -137,6 +147,12 @@ class JobApplicationForm(forms.ModelForm):
 
         return application_date
 
+    def clean_job_url(self):
+        return validate_http_url(
+            self.cleaned_data.get('job_url', ''),
+            'Enter a valid job URL using http:// or https://.',
+        )
+
     def clean_currency(self):
         currency = self.cleaned_data.get('currency', '').strip().upper()
 
@@ -223,6 +239,12 @@ class ApplicationDocumentForm(forms.ModelForm):
                 'invalid': 'Enter a valid document link.',
             },
         }
+
+    def clean_link(self):
+        return validate_http_url(
+            self.cleaned_data.get('link', ''),
+            'Enter a valid document link using http:// or https://.',
+        )
 
 
 class ReminderForm(forms.ModelForm):

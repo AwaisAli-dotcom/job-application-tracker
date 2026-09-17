@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone as django_timezone
 
@@ -61,6 +61,17 @@ class AuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['form'].errors)
         self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_login_form_preserves_requested_destination(self):
+        response = self.client.get(
+            reverse('login'),
+            {'next': reverse('application_list')},
+        )
+
+        self.assertContains(
+            response,
+            f'<input type="hidden" name="next" value="{reverse("application_list")}">',
+        )
 
     def test_registration_works_and_logs_user_in(self):
         response = self.client.post(
@@ -158,6 +169,15 @@ class AuthenticationTests(TestCase):
 
         self.assertContains(response, self.user_application.company)
         self.assertNotContains(response, self.other_application.company)
+
+    def test_csrf_failure_uses_friendly_page(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.user)
+
+        response = csrf_client.post(reverse('application_create'), {})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, 'Access not allowed', status_code=403)
 
 
 class DashboardTests(TestCase):
@@ -554,6 +574,14 @@ class JobApplicationDetailTests(TestCase):
         self.assertContains(response, 'EUR')
         self.assertContains(response, 'Sept. 15, 2026')
         self.assertContains(response, 'Prepare for technical interview.')
+
+    def test_edit_page_uses_edit_heading(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('application_update', args=[self.application.pk]))
+
+        self.assertContains(response, 'Edit Job Application')
+        self.assertContains(response, 'Save Changes')
 
     def test_status_history_appears_on_detail_page(self):
         StatusHistory.objects.create(
@@ -1039,6 +1067,17 @@ class DocumentReminderTests(TestCase):
                 application=self.other_application
             ).exists()
         )
+
+    def test_document_link_requires_http_or_https(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(link='ftp://example.com/private-cv'),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Enter a valid document link using http:// or https://.')
 
     def test_owner_can_delete_document_metadata(self):
         self.client.login(username='metadatauser', password='testpass123')
@@ -1791,6 +1830,15 @@ class JobApplicationFormValidationTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors['job_url'], ['Enter a valid job URL.'])
+
+    def test_non_http_job_url_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(job_url='ftp://example.com/job'))
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['job_url'],
+            ['Enter a valid job URL using http:// or https://.'],
+        )
 
     def test_blank_url_allowed(self):
         form = JobApplicationForm(data=self.valid_form_data(job_url=''))
