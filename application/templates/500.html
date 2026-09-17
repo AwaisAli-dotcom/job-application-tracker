@@ -1,0 +1,11 @@
+{% extends 'application/base.html' %}
+
+{% block title %}Something Went Wrong{% endblock %}
+
+{% block content %}
+<div class="container error-page">
+    <h1>Something went wrong</h1>
+    <p>Please try again. Technical details have not been shown for your security.</p>
+    <a class="view-link" href="{% url 'home' %}">Return home</a>
+</div>
+{% endblock %}

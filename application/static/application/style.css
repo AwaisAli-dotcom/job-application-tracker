@@ -5,6 +5,22 @@ body {
     color: #222;
 }
 
+.skip-link {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 1000;
+    padding: 8px 12px;
+    color: #fff;
+    background: #101828;
+    border-radius: 6px;
+    transform: translateY(-150%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
 .site-header {
     background: #fff;
     border-bottom: 1px solid #e5e7eb;
@@ -60,6 +76,33 @@ body {
 
 .site-logout-form button:hover {
     background: #eef2f7;
+}
+
+.site-footer {
+    margin-top: 40px;
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+}
+
+.site-footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 20px;
+    color: #667085;
+    font-size: 14px;
+}
+
+.site-footer nav {
+    display: flex;
+    gap: 14px;
+}
+
+.site-footer a {
+    color: #344054;
 }
 
 .messages {
@@ -557,6 +600,31 @@ h1 {
     align-items: flex-start;
     justify-content: space-between;
     margin-bottom: 14px;
+}
+
+.list-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    color: #344054;
+    background: #f8fafc;
+    border: 1px solid #d0d5dd;
+    border-radius: 7px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.secondary-button:hover {
+    background: #eef2f7;
 }
 
 .application-list-container {
@@ -1088,7 +1156,23 @@ h1 {
     font-size: 13px;
 }
 
+.public-page,
+.error-page {
+    max-width: 720px;
+}
+
+.public-page p,
+.error-page p {
+    color: #475467;
+    line-height: 1.6;
+}
+
 @media (max-width: 700px) {
+    .site-footer-inner {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
     .interview-item {
         align-items: flex-start;
         flex-direction: column;

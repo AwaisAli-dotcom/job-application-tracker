@@ -1,0 +1,16 @@
+{% extends 'application/base.html' %}
+
+{% block title %}Account{% endblock %}
+
+{% block content %}
+<div class="container auth-container">
+    <h1>Account</h1>
+
+    <form method="POST" class="form-card auth-card">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <button type="submit">Save Changes</button>
+    </form>
+</div>
+{% endblock %}

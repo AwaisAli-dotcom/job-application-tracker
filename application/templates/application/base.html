@@ -1,11 +1,15 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Job Application Tracker{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'application/style.css' %}">
 </head>
 <body>
+
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
 <header class="site-header">
     <div class="site-header-inner">
@@ -20,6 +24,7 @@
                 <a href="{% url 'kanban_board' %}">Kanban</a>
                 <a href="{% url 'interview_list' %}">Interviews</a>
                 <a href="{% url 'application_create' %}">Add</a>
+                <a href="{% url 'profile' %}">Account</a>
                 <form method="POST" action="{% url 'logout' %}" class="site-logout-form">
                     {% csrf_token %}
                     <button type="submit">Log Out</button>
@@ -43,7 +48,21 @@
     </div>
 {% endif %}
 
-{% block content %}{% endblock %}
+<main id="main-content">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <span>Job Application Tracker</span>
+        <nav aria-label="Footer navigation">
+            <a href="{% url 'about' %}">About</a>
+            <a href="{% url 'privacy' %}">Privacy</a>
+            <a href="https://github.com/AwaisAli-dotcom/job-application-tracker" rel="noopener noreferrer">GitHub</a>
+        </nav>
+    </div>
+</footer>
+
 {% block scripts %}{% endblock %}
 
 </body>

@@ -1,19 +1,27 @@
+import csv
 from collections import Counter
 from datetime import date
 
 from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
 
 from .models import ApplicationDocument, Interview, JobApplication, Reminder, StatusHistory
-from .forms import ApplicationDocumentForm, InterviewForm, JobApplicationForm, ReminderForm
+from .forms import (
+    ApplicationDocumentForm,
+    InterviewForm,
+    JobApplicationForm,
+    ProfileForm,
+    RegistrationForm,
+    ReminderForm,
+)
 
 
 def home(request):
@@ -23,27 +31,112 @@ def home(request):
     return render(request, 'application/home.html')
 
 
+def about(request):
+    return render(request, 'application/about.html')
+
+
+def privacy(request):
+    return render(request, 'application/privacy.html')
+
+
 def register(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = RegistrationForm(request.POST)
 
         if form.is_valid():
             user = form.save()
             login(request, user)
+            messages.success(request, 'Your account has been created.')
 
             return redirect('dashboard')
 
     else:
-        form = UserCreationForm()
+        form = RegistrationForm()
 
     return render(
         request,
         'registration/register.html',
         {'form': form}
     )
+
+
+@login_required
+def profile(request):
+    if request.method == 'POST':
+        form = ProfileForm(request.POST, instance=request.user)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Your account details have been updated.')
+
+            return redirect('profile')
+
+    else:
+        form = ProfileForm(instance=request.user)
+
+    return render(request, 'registration/profile.html', {'form': form})
+
+
+def csv_safe(value):
+    text = '' if value is None else str(value)
+
+    if text.startswith(('=', '+', '-', '@')):
+        return f"'{text}"
+
+    return text
+
+
+@login_required
+def application_export(request):
+    applications = JobApplication.objects.filter(user=request.user).order_by('-created_at')
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="job-applications.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'Company',
+        'Job title',
+        'Location',
+        'Job URL',
+        'Employment type',
+        'Work mode',
+        'Source',
+        'Status',
+        'Salary',
+        'Salary minimum',
+        'Salary maximum',
+        'Currency',
+        'Application date',
+        'Deadline',
+        'Notes',
+        'Created',
+        'Updated',
+    ])
+
+    for job in applications:
+        writer.writerow([
+            csv_safe(job.company),
+            csv_safe(job.job_title),
+            csv_safe(job.location),
+            csv_safe(job.job_url),
+            job.get_employment_type_display(),
+            job.get_work_mode_display(),
+            csv_safe(job.source),
+            job.get_status_display(),
+            csv_safe(job.salary),
+            job.salary_min if job.salary_min is not None else '',
+            job.salary_max if job.salary_max is not None else '',
+            csv_safe(job.currency),
+            job.application_date.isoformat() if job.application_date else '',
+            job.deadline.isoformat() if job.deadline else '',
+            csv_safe(job.notes),
+            timezone.localtime(job.created_at).isoformat(),
+            timezone.localtime(job.updated_at).isoformat(),
+        ])
+
+    return response
 
 
 def record_status_change(job, old_status, new_status):
@@ -277,6 +370,7 @@ def interview_create(request, application_pk):
             interview.user = request.user
             interview.application = application
             interview.save()
+            messages.success(request, 'Interview added.')
 
             return redirect('application_detail', pk=application.pk)
 
@@ -306,6 +400,7 @@ def interview_update(request, pk):
 
         if form.is_valid():
             form.save()
+            messages.success(request, 'Interview updated.')
 
             return redirect('application_detail', pk=interview.application.pk)
 
@@ -335,6 +430,7 @@ def interview_delete(request, pk):
     if request.method == 'POST':
         application_pk = interview.application.pk
         interview.delete()
+        messages.success(request, 'Interview deleted.')
 
         return redirect('application_detail', pk=application_pk)
 
@@ -361,6 +457,7 @@ def document_create(request, application_pk):
             document.user = request.user
             document.application = application
             document.save()
+            messages.success(request, 'Document added.')
 
             return redirect('application_detail', pk=application.pk)
 
@@ -389,6 +486,7 @@ def document_delete(request, pk):
     if request.method == 'POST':
         application_pk = document.application.pk
         document.delete()
+        messages.success(request, 'Document deleted.')
 
         return redirect('application_detail', pk=application_pk)
 
@@ -415,6 +513,7 @@ def reminder_create(request, application_pk):
             reminder.user = request.user
             reminder.application = application
             reminder.save()
+            messages.success(request, 'Reminder added.')
 
             return redirect('application_detail', pk=application.pk)
 
@@ -444,6 +543,7 @@ def reminder_update(request, pk):
 
         if form.is_valid():
             form.save()
+            messages.success(request, 'Reminder updated.')
 
             return redirect('application_detail', pk=reminder.application.pk)
 
@@ -473,6 +573,7 @@ def reminder_delete(request, pk):
     if request.method == 'POST':
         application_pk = reminder.application.pk
         reminder.delete()
+        messages.success(request, 'Reminder deleted.')
 
         return redirect('application_detail', pk=application_pk)
 
@@ -540,6 +641,7 @@ def update_application_status(request, pk):
             }
         )
 
+    messages.success(request, 'Application status updated.')
     return redirect('kanban_board')
 
 
@@ -552,6 +654,7 @@ def application_create(request):
             job = form.save(commit=False)
             job.user = request.user
             job.save()
+            messages.success(request, 'Application added.')
 
             return redirect('application_list')
 
@@ -580,6 +683,7 @@ def application_update(request, pk):
         if form.is_valid():
             job = form.save()
             record_status_change(job, old_status, job.status)
+            messages.success(request, 'Application updated.')
 
             return redirect('application_list')
 
@@ -604,6 +708,7 @@ def application_delete(request, pk):
 
     if request.method == 'POST':
         job.delete()
+        messages.success(request, 'Application deleted.')
         return redirect('application_list')
 
     return render(

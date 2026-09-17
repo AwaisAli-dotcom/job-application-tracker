@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone as django_timezone
 
@@ -65,6 +65,7 @@ class AuthenticationTests(TestCase):
             reverse('register'),
             {
                 'username': 'newuser',
+                'email': 'NewUser@Example.com',
                 'password1': 'StrongPass12345!',
                 'password2': 'StrongPass12345!',
             }
@@ -74,10 +75,55 @@ class AuthenticationTests(TestCase):
         new_user = User.objects.get(username='newuser')
         self.assertRedirects(response, reverse('dashboard'))
         self.assertTrue(new_user.check_password('StrongPass12345!'))
+        self.assertEqual(new_user.email, 'newuser@example.com')
         self.assertEqual(
             int(self.client.session['_auth_user_id']),
             new_user.pk
         )
+
+    def test_registration_rejects_duplicate_email(self):
+        self.user.email = 'used@example.com'
+        self.user.save(update_fields=['email'])
+
+        response = self.client.post(
+            reverse('register'),
+            {
+                'username': 'anotheruser',
+                'email': 'USED@example.com',
+                'password1': 'StrongPass12345!',
+                'password2': 'StrongPass12345!',
+            }
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'An account with this email already exists.')
+        self.assertFalse(get_user_model().objects.filter(username='anotheruser').exists())
+
+    def test_profile_requires_login(self):
+        response = self.client.get(reverse('profile'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('profile')}"
+        )
+
+    def test_user_can_update_profile(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('profile'),
+            {
+                'username': 'updatedauthuser',
+                'email': 'UPDATED@example.com',
+            },
+            follow=True,
+        )
+
+        self.user.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.user.username, 'updatedauthuser')
+        self.assertEqual(self.user.email, 'updated@example.com')
+        self.assertContains(response, 'Your account details have been updated.')
 
     def test_logout_works(self):
         self.client.login(username='authuser', password='testpass123')
@@ -157,6 +203,23 @@ class DashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Job Application Tracker')
+        self.assertContains(response, 'width=device-width, initial-scale=1')
+
+    def test_about_and_privacy_pages_are_public(self):
+        about_response = self.client.get(reverse('about'))
+        privacy_response = self.client.get(reverse('privacy'))
+
+        self.assertEqual(about_response.status_code, 200)
+        self.assertEqual(privacy_response.status_code, 200)
+        self.assertContains(about_response, 'private workspace')
+        self.assertContains(privacy_response, 'Other users cannot access')
+
+    @override_settings(DEBUG=False)
+    def test_unknown_page_uses_friendly_404_template(self):
+        response = self.client.get('/this-page-does-not-exist/')
+
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, 'Page not found', status_code=404)
 
     def test_authenticated_home_redirects_to_dashboard(self):
         self.client.login(username='dashboarduser', password='testpass123')
@@ -199,6 +262,59 @@ class DashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'No applications yet')
+
+
+class ApplicationExportTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='exportuser',
+            password='testpass123'
+        )
+        self.other_user = User.objects.create_user(
+            username='otherexportuser',
+            password='testpass123'
+        )
+        self.application = JobApplication.objects.create(
+            user=self.user,
+            company='Export Company',
+            job_title='Data Developer',
+            location='Vilnius',
+            status='applied',
+            notes='=HYPERLINK("https://example.com")',
+        )
+        JobApplication.objects.create(
+            user=self.other_user,
+            company='Private Export Company',
+            job_title='Hidden Role',
+        )
+
+    def test_anonymous_export_redirects_to_login(self):
+        response = self.client.get(reverse('application_export'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('application_export')}"
+        )
+
+    def test_export_contains_only_current_users_applications(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('application_export'))
+        content = response.content.decode('utf-8')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('attachment; filename="job-applications.csv"', response['Content-Disposition'])
+        self.assertIn('Export Company', content)
+        self.assertNotIn('Private Export Company', content)
+
+    def test_export_neutralizes_spreadsheet_formulas(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('application_export'))
+
+        self.assertIn("'=HYPERLINK", response.content.decode('utf-8'))
 
 
 class JobApplicationDeleteTests(TestCase):
@@ -1148,7 +1264,7 @@ class JobApplicationSearchFilterTests(TestCase):
 
         self.assertContains(
             response,
-            '<select name="status" onchange="this.form.submit()">'
+            '<select name="status" onchange="this.form.submit()" aria-label="Filter by status">'
         )
 
     def test_sort_filter_auto_submits_when_changed(self):
@@ -1158,7 +1274,7 @@ class JobApplicationSearchFilterTests(TestCase):
 
         self.assertContains(
             response,
-            '<select name="sort" onchange="this.form.submit()">'
+            '<select name="sort" onchange="this.form.submit()" aria-label="Sort applications">'
         )
 
 

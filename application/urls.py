@@ -3,10 +3,14 @@ from . import views
 
 urlpatterns = [
     path('accounts/register/', views.register, name='register'),
+    path('accounts/profile/', views.profile, name='profile'),
     path('', views.home, name='home'),
+    path('about/', views.about, name='about'),
+    path('privacy/', views.privacy, name='privacy'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('interviews/', views.interview_list, name='interview_list'),
     path('applications/', views.application_list, name='application_list'),
+    path('applications/export/', views.application_export, name='application_export'),
     path('applications/kanban/', views.kanban_board, name='kanban_board'),
     path('applications/<int:pk>/', views.application_detail, name='application_detail'),
     path('applications/<int:pk>/status/', views.update_application_status, name='application_status_update'),

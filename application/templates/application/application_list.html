@@ -8,16 +8,19 @@
     <div class="list-header">
         <div>
             <h1>My Job Applications</h1>
-            <a class="add-button" href="{% url 'application_create' %}">
-                + Add Application
-            </a>
+            <div class="list-actions">
+                <a class="add-button" href="{% url 'application_create' %}">
+                    + Add Application
+                </a>
+                <a class="secondary-button" href="{% url 'application_export' %}">Export CSV</a>
+            </div>
         </div>
     </div>
 
     <form method="GET" class="filter-form">
-        <input type="search" name="search" value="{{ search }}" placeholder="Search applications...">
+        <input type="search" name="search" value="{{ search }}" placeholder="Search applications..." aria-label="Search applications">
 
-        <select name="status" onchange="this.form.submit()">
+        <select name="status" onchange="this.form.submit()" aria-label="Filter by status">
             <option value="">All statuses</option>
             {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
@@ -26,7 +29,7 @@
             {% endfor %}
         </select>
 
-        <select name="employment_type" onchange="this.form.submit()">
+        <select name="employment_type" onchange="this.form.submit()" aria-label="Filter by employment type">
             <option value="">All types</option>
             {% for value, label in employment_type_choices %}
                 <option value="{{ value }}" {% if selected_employment_type == value %}selected{% endif %}>
@@ -38,7 +41,7 @@
         <input type="date" name="date_from" value="{{ date_from }}" aria-label="Application date from">
         <input type="date" name="date_to" value="{{ date_to }}" aria-label="Application date to">
 
-        <select name="sort" onchange="this.form.submit()">
+        <select name="sort" onchange="this.form.submit()" aria-label="Sort applications">
             {% for value, label in sort_choices %}
                 <option value="{{ value }}" {% if selected_sort == value %}selected{% endif %}>
                     {{ label }}

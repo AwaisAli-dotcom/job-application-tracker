@@ -1,0 +1,11 @@
+{% extends 'application/base.html' %}
+
+{% block title %}Page Not Found{% endblock %}
+
+{% block content %}
+<div class="container error-page">
+    <h1>Page not found</h1>
+    <p>The page may have moved, or you may not have access to that private record.</p>
+    <a class="view-link" href="{% url 'home' %}">Return home</a>
+</div>
+{% endblock %}
