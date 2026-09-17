@@ -1,10 +1,10 @@
 {% extends 'application/base.html' %}
 
-{% block title %}Add Document - {{ application.company }}{% endblock %}
+{% block title %}{% if document %}Edit Document{% else %}Add Document{% endif %} - {{ application.company }}{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h1>Add Document</h1>
+    <h1>{% if document %}Edit Document{% else %}Add Document{% endif %}</h1>
     <a class="back-link" href="{% url 'application_detail' application.pk %}">
         Back to Application
     </a>

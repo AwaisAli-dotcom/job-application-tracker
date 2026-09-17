@@ -122,6 +122,12 @@
                 <strong>{{ interview.get_interview_type_display }}</strong>
                 - {{ interview.get_mode_display }}
                 <span>{{ interview.scheduled_at }}</span>
+                {% if interview.interviewer %}
+                    <span>Interviewer: {{ interview.interviewer }}</span>
+                {% endif %}
+                {% if interview.location_or_link %}
+                    <span>Location or link: {{ interview.location_or_link }}</span>
+                {% endif %}
                 {% if interview.outcome %}
                     <span>{{ interview.outcome }}</span>
                 {% endif %}
@@ -153,6 +159,7 @@
                 {% endif %}
             </p>
             <div class="card-actions">
+                <a class="edit-link" href="{% url 'document_update' document.pk %}">Edit</a>
                 <a class="delete-link" href="{% url 'document_delete' document.pk %}">Delete</a>
             </div>
         {% empty %}

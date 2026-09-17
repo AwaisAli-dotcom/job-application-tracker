@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 
 class JobApplication(models.Model):
@@ -19,6 +20,7 @@ class JobApplication(models.Model):
         ('part_time', 'Part-time'),
         ('internship', 'Internship'),
         ('contract', 'Contract'),
+        ('temporary', 'Temporary'),
         ('remote', 'Remote'),
     ]
 
@@ -115,6 +117,57 @@ class JobApplication(models.Model):
         auto_now=True
     )
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(salary_min__gte=0) | models.Q(salary_min__isnull=True),
+                name='application_salary_min_nonnegative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(salary_max__gte=0) | models.Q(salary_max__isnull=True),
+                name='application_salary_max_nonnegative',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(salary_min__isnull=True)
+                    | models.Q(salary_max__isnull=True)
+                    | models.Q(salary_max__gte=models.F('salary_min'))
+                ),
+                name='application_salary_range_valid',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(application_date__isnull=True)
+                    | models.Q(deadline__isnull=True)
+                    | models.Q(deadline__gte=models.F('application_date'))
+                ),
+                name='application_deadline_not_before_date',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        if self.salary_min is not None and self.salary_min < 0:
+            errors['salary_min'] = 'Salary minimum cannot be negative.'
+
+        if self.salary_max is not None and self.salary_max < 0:
+            errors['salary_max'] = 'Salary maximum cannot be negative.'
+
+        if (
+            self.salary_min is not None
+            and self.salary_max is not None
+            and self.salary_max < self.salary_min
+        ):
+            errors['salary_max'] = 'Salary maximum must be greater than or equal to salary minimum.'
+
+        if self.application_date and self.deadline and self.deadline < self.application_date:
+            errors['deadline'] = 'Deadline cannot be before the application date.'
+
+        if errors:
+            raise ValidationError(errors)
+
     def __str__(self):
         return f"{self.company} - {self.job_title}"
 
@@ -147,6 +200,15 @@ class StatusHistory(models.Model):
 
     def __str__(self):
         return f"{self.application} moved from {self.old_status} to {self.new_status}"
+
+    def clean(self):
+        super().clean()
+
+        if self.application_id and self.user_id and self.application.user_id != self.user_id:
+            raise ValidationError({'user': 'Status history owner must match the application owner.'})
+
+        if self.old_status == self.new_status:
+            raise ValidationError({'new_status': 'The new status must be different.'})
 
 
 class Interview(models.Model):
@@ -187,6 +249,14 @@ class Interview(models.Model):
         default='video'
     )
     scheduled_at = models.DateTimeField()
+    interviewer = models.CharField(
+        max_length=150,
+        blank=True
+    )
+    location_or_link = models.CharField(
+        max_length=255,
+        blank=True
+    )
     outcome = models.CharField(
         max_length=150,
         blank=True
@@ -206,6 +276,12 @@ class Interview(models.Model):
 
     def __str__(self):
         return f"{self.application} interview on {self.scheduled_at}"
+
+    def clean(self):
+        super().clean()
+
+        if self.application_id and self.user_id and self.application.user_id != self.user_id:
+            raise ValidationError({'user': 'Interview owner must match the application owner.'})
 
 
 class ApplicationDocument(models.Model):
@@ -242,6 +318,12 @@ class ApplicationDocument(models.Model):
     def __str__(self):
         return self.title
 
+    def clean(self):
+        super().clean()
+
+        if self.application_id and self.user_id and self.application.user_id != self.user_id:
+            raise ValidationError({'user': 'Document owner must match the application owner.'})
+
 
 class Reminder(models.Model):
     user = models.ForeignKey(
@@ -266,3 +348,9 @@ class Reminder(models.Model):
 
     def __str__(self):
         return self.title
+
+    def clean(self):
+        super().clean()
+
+        if self.application_id and self.user_id and self.application.user_id != self.user_id:
+            raise ValidationError({'user': 'Reminder owner must match the application owner.'})

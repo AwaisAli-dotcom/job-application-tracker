@@ -17,6 +17,10 @@
                 <strong>{{ submitted_count }}</strong>
             </div>
             <div class="metric-card">
+                <span>Applied this month</span>
+                <strong>{{ applied_this_month }}</strong>
+            </div>
+            <div class="metric-card">
                 <span>Interviewing</span>
                 <strong>{{ interviews_count }}</strong>
             </div>
@@ -31,6 +35,10 @@
             <div class="metric-card">
                 <span>Offer rate</span>
                 <strong>{{ offer_rate }}%</strong>
+            </div>
+            <div class="metric-card">
+                <span>Response rate</span>
+                <strong>{{ response_rate }}%</strong>
             </div>
         </section>
 
@@ -119,6 +127,23 @@
                     </div>
                 {% empty %}
                     <p>No upcoming reminders.</p>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="dashboard-panel">
+            <h2>Upcoming Deadlines</h2>
+            <div class="interview-list">
+                {% for job in upcoming_deadlines %}
+                    <div class="interview-item">
+                        <div>
+                            <strong>{{ job.company }}</strong>
+                            <span>{{ job.job_title }} - {{ job.deadline }}</span>
+                        </div>
+                        <a class="view-link" href="{% url 'application_detail' job.pk %}">View</a>
+                    </div>
+                {% empty %}
+                    <p>No upcoming deadlines.</p>
                 {% endfor %}
             </div>
         </section>

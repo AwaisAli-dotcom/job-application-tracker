@@ -13,7 +13,7 @@
                 <div class="interview-item">
                     <div>
                         <strong>{{ interview.application.company }}</strong>
-                        <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
+                        <span>{{ interview.get_interview_type_display }} - {{ interview.get_mode_display }} - {{ interview.scheduled_at }}</span>
                     </div>
                     <div class="card-actions">
                         <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">Application</a>
@@ -34,7 +34,7 @@
                 <div class="interview-item">
                     <div>
                         <strong>{{ interview.application.company }}</strong>
-                        <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
+                        <span>{{ interview.get_interview_type_display }} - {{ interview.get_mode_display }} - {{ interview.scheduled_at }}</span>
                     </div>
                     <div class="card-actions">
                         <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">Application</a>

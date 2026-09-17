@@ -174,17 +174,30 @@ class InterviewForm(forms.ModelForm):
             'interview_type',
             'mode',
             'scheduled_at',
+            'interviewer',
+            'location_or_link',
             'outcome',
             'notes',
         ]
+        labels = {
+            'interviewer': 'Interviewer (optional)',
+            'location_or_link': 'Location or meeting link (optional)',
+        }
         widgets = {
-            'scheduled_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'scheduled_at': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M',
+                attrs={'type': 'datetime-local'},
+            ),
         }
         error_messages = {
             'scheduled_at': {
                 'required': 'Interview date and time is required.',
             },
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['scheduled_at'].input_formats = ['%Y-%m-%dT%H:%M']
 
 
 class ApplicationDocumentForm(forms.ModelForm):
@@ -222,7 +235,10 @@ class ReminderForm(forms.ModelForm):
             'notes',
         ]
         widgets = {
-            'due_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'due_at': forms.DateTimeInput(
+                format='%Y-%m-%dT%H:%M',
+                attrs={'type': 'datetime-local'},
+            ),
         }
         error_messages = {
             'title': {
@@ -232,3 +248,7 @@ class ReminderForm(forms.ModelForm):
                 'required': 'Reminder date and time is required.',
             },
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['due_at'].input_formats = ['%Y-%m-%dT%H:%M']

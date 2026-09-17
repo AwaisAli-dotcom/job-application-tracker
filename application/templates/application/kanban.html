@@ -126,6 +126,7 @@
             updateColumnCounts();
         })
         .catch(function () {
+            window.alert('The status could not be updated. The board will reload with the saved status.');
             window.location.reload();
         });
     }

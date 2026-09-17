@@ -8,7 +8,8 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_http_methods, require_POST
@@ -156,19 +157,44 @@ def dashboard(request):
     applications = JobApplication.objects.filter(user=request.user)
     submitted_applications = applications.exclude(status='saved')
     interviewing_statuses = ['interview', 'technical_test']
+    response_statuses = ['interview', 'technical_test', 'offer', 'rejected']
     active_statuses = ['saved', 'applied', 'interview', 'technical_test', 'offer']
 
     total_applications = applications.count()
     submitted_count = submitted_applications.count()
     interviews_count = applications.filter(status__in=interviewing_statuses).count()
-    offers_count = applications.filter(status='offer').count()
+    reached_interview_count = submitted_applications.filter(
+        Q(status__in=interviewing_statuses)
+        | Q(
+            status_history__user=request.user,
+            status_history__new_status__in=interviewing_statuses,
+        )
+        | Q(interviews__user=request.user)
+    ).distinct().count()
+    offers_count = submitted_applications.filter(
+        Q(status='offer')
+        | Q(status_history__user=request.user, status_history__new_status='offer')
+    ).distinct().count()
+    response_count = submitted_applications.filter(
+        Q(status__in=response_statuses)
+        | Q(
+            status_history__user=request.user,
+            status_history__new_status__in=response_statuses,
+        )
+        | Q(interviews__user=request.user)
+    ).distinct().count()
     active_count = applications.filter(status__in=active_statuses).count()
     rejected_count = applications.filter(status='rejected').count()
     withdrawn_count = applications.filter(status='withdrawn').count()
-    interview_rate = round((interviews_count / submitted_count) * 100) if submitted_count else 0
+    interview_rate = round((reached_interview_count / submitted_count) * 100) if submitted_count else 0
     offer_rate = round((offers_count / submitted_count) * 100) if submitted_count else 0
+    response_rate = round((response_count / submitted_count) * 100) if submitted_count else 0
 
     current_month = timezone.localdate().replace(day=1)
+    applied_this_month = submitted_applications.filter(
+        application_date__year=current_month.year,
+        application_date__month=current_month.month,
+    ).count()
     month_starts = []
     year = current_month.year
     month = current_month.month
@@ -209,13 +235,18 @@ def dashboard(request):
     max_status_count = max([item['count'] for item in status_chart] + [1])
     upcoming_interviews = Interview.objects.filter(
         user=request.user,
+        application__user=request.user,
         scheduled_at__gte=timezone.now()
     ).select_related('application').order_by('scheduled_at')[:5]
     upcoming_reminders = Reminder.objects.filter(
         user=request.user,
+        application__user=request.user,
         completed=False,
         due_at__gte=timezone.now()
     ).select_related('application').order_by('due_at')[:5]
+    upcoming_deadlines = applications.filter(
+        deadline__gte=timezone.localdate()
+    ).order_by('deadline')[:5]
 
     return render(
         request,
@@ -223,6 +254,7 @@ def dashboard(request):
         {
             'total_applications': total_applications,
             'submitted_count': submitted_count,
+            'applied_this_month': applied_this_month,
             'interviews_count': interviews_count,
             'offers_count': offers_count,
             'active_count': active_count,
@@ -230,6 +262,7 @@ def dashboard(request):
             'withdrawn_count': withdrawn_count,
             'interview_rate': interview_rate,
             'offer_rate': offer_rate,
+            'response_rate': response_rate,
             'recent_applications': applications.order_by('-updated_at')[:5],
             'monthly_chart': monthly_chart,
             'max_monthly_count': max_monthly_count,
@@ -237,6 +270,7 @@ def dashboard(request):
             'max_status_count': max_status_count,
             'upcoming_interviews': upcoming_interviews,
             'upcoming_reminders': upcoming_reminders,
+            'upcoming_deadlines': upcoming_deadlines,
         }
     )
 
@@ -327,7 +361,12 @@ def application_list(request):
 @login_required
 def application_detail(request, pk):
     job = get_object_or_404(
-        JobApplication,
+        JobApplication.objects.prefetch_related(
+            Prefetch('interviews', queryset=Interview.objects.filter(user=request.user)),
+            Prefetch('documents', queryset=ApplicationDocument.objects.filter(user=request.user)),
+            Prefetch('reminders', queryset=Reminder.objects.filter(user=request.user)),
+            Prefetch('status_history', queryset=StatusHistory.objects.filter(user=request.user)),
+        ),
         pk=pk,
         user=request.user
     )
@@ -341,7 +380,10 @@ def application_detail(request, pk):
 
 @login_required
 def interview_list(request):
-    interviews = Interview.objects.filter(user=request.user).select_related('application')
+    interviews = Interview.objects.filter(
+        user=request.user,
+        application__user=request.user,
+    ).select_related('application')
     now = timezone.now()
 
     return render(
@@ -392,7 +434,8 @@ def interview_update(request, pk):
     interview = get_object_or_404(
         Interview.objects.select_related('application'),
         pk=pk,
-        user=request.user
+        user=request.user,
+        application__user=request.user,
     )
 
     if request.method == 'POST':
@@ -424,7 +467,8 @@ def interview_delete(request, pk):
     interview = get_object_or_404(
         Interview.objects.select_related('application'),
         pk=pk,
-        user=request.user
+        user=request.user,
+        application__user=request.user,
     )
 
     if request.method == 'POST':
@@ -480,7 +524,8 @@ def document_delete(request, pk):
     document = get_object_or_404(
         ApplicationDocument.objects.select_related('application'),
         pk=pk,
-        user=request.user
+        user=request.user,
+        application__user=request.user,
     )
 
     if request.method == 'POST':
@@ -494,6 +539,38 @@ def document_delete(request, pk):
         request,
         'application/document_confirm_delete.html',
         {'document': document}
+    )
+
+
+@login_required
+def document_update(request, pk):
+    document = get_object_or_404(
+        ApplicationDocument.objects.select_related('application'),
+        pk=pk,
+        user=request.user,
+        application__user=request.user,
+    )
+
+    if request.method == 'POST':
+        form = ApplicationDocumentForm(request.POST, instance=document)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Document updated.')
+
+            return redirect('application_detail', pk=document.application.pk)
+
+    else:
+        form = ApplicationDocumentForm(instance=document)
+
+    return render(
+        request,
+        'application/document_form.html',
+        {
+            'form': form,
+            'application': document.application,
+            'document': document,
+        }
     )
 
 
@@ -535,7 +612,8 @@ def reminder_update(request, pk):
     reminder = get_object_or_404(
         Reminder.objects.select_related('application'),
         pk=pk,
-        user=request.user
+        user=request.user,
+        application__user=request.user,
     )
 
     if request.method == 'POST':
@@ -567,7 +645,8 @@ def reminder_delete(request, pk):
     reminder = get_object_or_404(
         Reminder.objects.select_related('application'),
         pk=pk,
-        user=request.user
+        user=request.user,
+        application__user=request.user,
     )
 
     if request.method == 'POST':
@@ -627,10 +706,11 @@ def update_application_status(request, pk):
             status=400
         )
 
-    old_status = job.status
-    job.status = new_status
-    job.save(update_fields=['status', 'updated_at'])
-    record_status_change(job, old_status, new_status)
+    with transaction.atomic():
+        old_status = job.status
+        job.status = new_status
+        job.save(update_fields=['status', 'updated_at'])
+        record_status_change(job, old_status, new_status)
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return JsonResponse(
@@ -681,8 +761,9 @@ def application_update(request, pk):
         form = JobApplicationForm(request.POST, instance=job)
 
         if form.is_valid():
-            job = form.save()
-            record_status_change(job, old_status, job.status)
+            with transaction.atomic():
+                job = form.save()
+                record_status_change(job, old_status, job.status)
             messages.success(request, 'Application updated.')
 
             return redirect('application_list')

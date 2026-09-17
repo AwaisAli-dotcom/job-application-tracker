@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone as django_timezone
@@ -174,7 +176,8 @@ class DashboardTests(TestCase):
             user=self.user,
             company='Saved Company',
             job_title='Saved Role',
-            status='saved'
+            status='saved',
+            deadline=today + timedelta(days=5),
         )
         JobApplication.objects.create(
             user=self.user,
@@ -195,7 +198,8 @@ class DashboardTests(TestCase):
             company='Hidden Dashboard Company',
             job_title='Hidden Role',
             status='offer',
-            application_date=today
+            application_date=today,
+            deadline=today + timedelta(days=4),
         )
 
     def test_home_page_is_public(self):
@@ -244,12 +248,36 @@ class DashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['total_applications'], 3)
         self.assertEqual(response.context['submitted_count'], 2)
+        self.assertEqual(response.context['applied_this_month'], 2)
         self.assertEqual(response.context['interviews_count'], 1)
         self.assertEqual(response.context['offers_count'], 1)
         self.assertEqual(response.context['interview_rate'], 50)
         self.assertEqual(response.context['offer_rate'], 50)
+        self.assertEqual(response.context['response_rate'], 100)
         self.assertContains(response, 'Interview Company')
+        self.assertContains(response, 'Upcoming Deadlines')
+        self.assertContains(response, 'Saved Company')
         self.assertNotContains(response, 'Hidden Dashboard Company')
+
+    def test_interview_rate_counts_interview_records(self):
+        applied_application = JobApplication.objects.create(
+            user=self.user,
+            company='Recorded Interview Company',
+            job_title='Engineer',
+            status='applied',
+            application_date=django_timezone.localdate(),
+        )
+        Interview.objects.create(
+            user=self.user,
+            application=applied_application,
+            scheduled_at=django_timezone.now() + timedelta(days=1),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.context['submitted_count'], 3)
+        self.assertEqual(response.context['interview_rate'], 67)
 
     def test_empty_dashboard_has_helpful_empty_state(self):
         empty_user = get_user_model().objects.create_user(
@@ -315,6 +343,59 @@ class ApplicationExportTests(TestCase):
         response = self.client.get(reverse('application_export'))
 
         self.assertIn("'=HYPERLINK", response.content.decode('utf-8'))
+
+
+class ModelValidationTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='modeluser', password='testpass123')
+        self.other_user = User.objects.create_user(username='othermodeluser', password='testpass123')
+        self.application = JobApplication.objects.create(
+            user=self.user,
+            company='Model Company',
+            job_title='Engineer',
+        )
+
+    def test_application_defaults_and_string_representation(self):
+        self.assertEqual(self.application.status, 'saved')
+        self.assertEqual(str(self.application), 'Model Company - Engineer')
+
+    def test_model_rejects_invalid_salary_range(self):
+        self.application.salary_min = 4000
+        self.application.salary_max = 3000
+
+        with self.assertRaises(ValidationError):
+            self.application.full_clean()
+
+    def test_database_rejects_negative_salary(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            JobApplication.objects.create(
+                user=self.user,
+                company='Invalid Salary Company',
+                job_title='Engineer',
+                salary_min=-1,
+            )
+
+    def test_related_object_owner_must_match_application_owner(self):
+        interview = Interview(
+            user=self.other_user,
+            application=self.application,
+            scheduled_at=django_timezone.now(),
+        )
+
+        with self.assertRaises(ValidationError):
+            interview.full_clean()
+
+    def test_status_history_rejects_unchanged_status(self):
+        history = StatusHistory(
+            user=self.user,
+            application=self.application,
+            old_status='saved',
+            new_status='saved',
+        )
+
+        with self.assertRaises(ValidationError):
+            history.full_clean()
 
 
 class JobApplicationDeleteTests(TestCase):
@@ -691,6 +772,8 @@ class InterviewTests(TestCase):
             'interview_type': 'hr_screen',
             'mode': 'video',
             'scheduled_at': (django_timezone.now() + timedelta(days=5)).strftime('%Y-%m-%dT%H:%M'),
+            'interviewer': 'Sam Recruiter',
+            'location_or_link': 'https://meet.example.com/interview',
             'outcome': '',
             'notes': 'Initial conversation.',
         }
@@ -730,7 +813,9 @@ class InterviewTests(TestCase):
             Interview.objects.filter(
                 user=self.user,
                 application=self.application,
-                interview_type='hr_screen'
+                interview_type='hr_screen',
+                interviewer='Sam Recruiter',
+                location_or_link='https://meet.example.com/interview',
             ).exists()
         )
 
@@ -764,6 +849,14 @@ class InterviewTests(TestCase):
         )
         self.interview.refresh_from_db()
         self.assertEqual(self.interview.outcome, 'Moved to next round')
+
+    def test_edit_form_formats_existing_datetime_for_browser_input(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('interview_update', args=[self.interview.pk]))
+        expected_value = django_timezone.localtime(self.interview.scheduled_at).strftime('%Y-%m-%dT%H:%M')
+
+        self.assertContains(response, f'value="{expected_value}"')
 
     def test_user_cannot_update_another_users_interview(self):
         self.client.login(username='interviewuser', password='testpass123')
@@ -803,6 +896,19 @@ class InterviewTests(TestCase):
 
         self.assertContains(response, 'Technical')
         self.assertContains(response, 'Prepare Django examples.')
+
+    def test_inconsistent_related_owner_is_not_exposed(self):
+        Interview.objects.create(
+            user=self.other_user,
+            application=self.application,
+            scheduled_at=self.future_time,
+            notes='Private mismatched interview',
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('application_detail', args=[self.application.pk]))
+
+        self.assertNotContains(response, 'Private mismatched interview')
 
     def test_dashboard_shows_upcoming_interviews(self):
         self.client.login(username='interviewuser', password='testpass123')
@@ -945,6 +1051,33 @@ class DocumentReminderTests(TestCase):
         )
         self.assertFalse(ApplicationDocument.objects.filter(pk=self.document.pk).exists())
 
+    def test_owner_can_update_document_metadata(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_update', args=[self.document.pk]),
+            self.document_form_data(title='Updated CV'),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk])
+        )
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.title, 'Updated CV')
+
+    def test_user_cannot_update_another_users_document(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_update', args=[self.hidden_document.pk]),
+            self.document_form_data(title='Changed'),
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.hidden_document.refresh_from_db()
+        self.assertEqual(self.hidden_document.title, 'Hidden CV')
+
     def test_user_cannot_delete_another_users_document(self):
         self.client.login(username='metadatauser', password='testpass123')
 
@@ -1003,6 +1136,14 @@ class DocumentReminderTests(TestCase):
         )
         self.reminder.refresh_from_db()
         self.assertEqual(self.reminder.title, 'Updated follow-up')
+
+    def test_reminder_edit_form_formats_existing_datetime(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('reminder_update', args=[self.reminder.pk]))
+        expected_value = django_timezone.localtime(self.reminder.due_at).strftime('%Y-%m-%dT%H:%M')
+
+        self.assertContains(response, f'value="{expected_value}"')
 
     def test_user_cannot_update_another_users_reminder(self):
         self.client.login(username='metadatauser', password='testpass123')
