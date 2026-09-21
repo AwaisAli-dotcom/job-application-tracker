@@ -1,7 +1,9 @@
+import re
 from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
@@ -186,6 +188,133 @@ class AuthenticationTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertContains(response, 'Access not allowed', status_code=403)
+
+
+class PasswordManagementTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='passworduser',
+            email='password@example.com',
+            password='CurrentPass123!',
+        )
+
+    def test_login_page_links_to_password_reset(self):
+        response = self.client.get(reverse('login'))
+
+        self.assertContains(response, reverse('password_reset'))
+        self.assertContains(response, 'Forgot password?')
+
+    def test_account_page_links_to_password_change(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('profile'))
+
+        self.assertContains(response, reverse('password_change'))
+        self.assertContains(response, 'Change Password')
+
+    def test_password_change_requires_login(self):
+        response = self.client.get(reverse('password_change'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('password_change')}",
+        )
+
+    def test_user_can_change_password_and_remain_logged_in(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('password_change'),
+            {
+                'old_password': 'CurrentPass123!',
+                'new_password1': 'NewSecurePass456!',
+                'new_password2': 'NewSecurePass456!',
+            },
+        )
+
+        self.assertRedirects(response, reverse('password_change_done'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('NewSecurePass456!'))
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
+
+    def test_wrong_current_password_is_rejected(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('password_change'),
+            {
+                'old_password': 'WrongPassword123!',
+                'new_password1': 'NewSecurePass456!',
+                'new_password2': 'NewSecurePass456!',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Your old password was entered incorrectly.')
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('CurrentPass123!'))
+
+    def test_password_reset_sends_secure_token_email(self):
+        response = self.client.post(
+            reverse('password_reset'),
+            {'email': self.user.email},
+        )
+
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertIn('Reset your Job Application Tracker password', mail.outbox[0].subject)
+        self.assertRegex(
+            mail.outbox[0].body,
+            r'http://testserver/accounts/reset/[^/]+/[^/]+/',
+        )
+
+    def test_unknown_reset_email_uses_same_success_page(self):
+        response = self.client.post(
+            reverse('password_reset'),
+            {'email': 'unknown@example.com'},
+        )
+
+        self.assertRedirects(response, reverse('password_reset_done'))
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_password_reset_token_can_replace_password(self):
+        self.client.post(
+            reverse('password_reset'),
+            {'email': self.user.email},
+        )
+        reset_path = re.search(
+            r'http://testserver(?P<path>/accounts/reset/[^/]+/[^/]+/)',
+            mail.outbox[0].body,
+        ).group('path')
+
+        response = self.client.get(reset_path)
+        self.assertRedirects(response, response.url)
+
+        response = self.client.post(
+            response.url,
+            {
+                'new_password1': 'ResetSecurePass789!',
+                'new_password2': 'ResetSecurePass789!',
+            },
+        )
+
+        self.assertRedirects(response, reverse('password_reset_complete'))
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('ResetSecurePass789!'))
+
+    def test_invalid_password_reset_token_is_rejected(self):
+        response = self.client.get(
+            reverse(
+                'password_reset_confirm',
+                kwargs={'uidb64': 'invalid', 'token': 'invalid-token'},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'This reset link is invalid or has expired.')
+        self.assertNotContains(response, 'Set New Password')
 
 
 class DashboardTests(TestCase):

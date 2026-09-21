@@ -262,14 +262,65 @@ LOGGING = {
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-DEFAULT_EMAIL_BACKEND = os.getenv(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend'
-    if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
-)
+if TESTING:
+    email_backend = 'django.core.mail.backends.locmem.EmailBackend'
+elif DEBUG:
+    email_backend = os.getenv(
+        'EMAIL_BACKEND',
+        'django.core.mail.backends.console.EmailBackend',
+    )
+else:
+    email_backend = os.getenv(
+        'EMAIL_BACKEND',
+        'django.core.mail.backends.smtp.EmailBackend',
+    )
+
+email_options = {}
+
+if email_backend == 'django.core.mail.backends.smtp.EmailBackend':
+    email_options = {
+        'host': os.getenv('EMAIL_HOST'),
+        'port': int(os.getenv('EMAIL_PORT', '587')),
+        'username': os.getenv('EMAIL_HOST_USER'),
+        'password': os.getenv('EMAIL_HOST_PASSWORD'),
+        'use_tls': env_bool('EMAIL_USE_TLS', True),
+        'timeout': int(os.getenv('EMAIL_TIMEOUT', '10')),
+    }
+    smtp_configured = all(
+        [
+            email_options['host'],
+            email_options['username'],
+            email_options['password'],
+        ]
+    )
+
+    if not smtp_configured and (
+        any(
+            [
+                email_options['host'],
+                email_options['username'],
+                email_options['password'],
+            ]
+        )
+        or os.getenv('VERCEL')
+    ):
+        raise ImproperlyConfigured(
+            'EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD must be set '
+            'for production email.'
+        )
+
+    if not smtp_configured:
+        email_backend = 'django.core.mail.backends.console.EmailBackend'
+        email_options = {}
 
 MAILERS = {
     'default': {
-        'BACKEND': DEFAULT_EMAIL_BACKEND,
+        'BACKEND': email_backend,
+        **({'OPTIONS': email_options} if email_options else {}),
     },
 }
+
+DEFAULT_FROM_EMAIL = os.getenv(
+    'DEFAULT_FROM_EMAIL',
+    'Job Application Tracker <noreply@localhost>',
+)

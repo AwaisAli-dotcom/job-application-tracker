@@ -23,5 +23,14 @@
             <button type="submit">Save Changes</button>
         </form>
     </section>
+
+    <section class="settings-panel" aria-labelledby="security-heading">
+        <div class="settings-panel-heading">
+            <h2 id="security-heading">Security</h2>
+            <p>Choose a new password while keeping your account signed in.</p>
+        </div>
+
+        <a class="secondary-button" href="{% url 'password_change' %}">Change Password</a>
+    </section>
 </div>
 {% endblock %}
