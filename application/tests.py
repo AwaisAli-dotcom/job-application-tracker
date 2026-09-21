@@ -479,7 +479,7 @@ class DashboardTests(TestCase):
         self.assertEqual(about_response.status_code, 200)
         self.assertEqual(privacy_response.status_code, 200)
         self.assertContains(about_response, 'private workspace')
-        self.assertContains(privacy_response, 'Other users cannot access')
+        self.assertContains(privacy_response, 'visible only after signing in')
 
     @override_settings(DEBUG=False)
     def test_unknown_page_uses_friendly_404_template(self):
@@ -2544,3 +2544,49 @@ class JobApplicationFormValidationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Company name is required.')
         self.assertContains(response, 'Enter a valid job URL.')
+
+
+class PublicSeoTests(TestCase):
+    def test_public_pages_have_metadata_and_canonical_without_query_string(self):
+        for name in ('home', 'about', 'privacy'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name) + '?tracking=ignored')
+                self.assertContains(response, '<meta name="robots" content="index, follow">')
+                self.assertContains(response, '<meta name="description"')
+                self.assertContains(response, '<meta property="og:title"')
+                self.assertContains(response, '<meta property="og:url"')
+                self.assertContains(
+                    response,
+                    f'<link rel="canonical" href="http://testserver{reverse(name)}">',
+                )
+                self.assertNotContains(response, 'tracking=ignored')
+
+    def test_private_and_authentication_pages_are_not_indexable(self):
+        self.assertContains(
+            self.client.get(reverse('login')),
+            '<meta name="robots" content="noindex, nofollow">',
+        )
+        User = get_user_model()
+        user = User.objects.create_user(username='seo-user', password='testpass123')
+        self.client.force_login(user)
+        for name in ('dashboard', 'application_list', 'profile', 'kanban_board'):
+            with self.subTest(page=name):
+                response = self.client.get(reverse(name))
+                self.assertContains(response, '<meta name="robots" content="noindex, nofollow">')
+                self.assertNotContains(response, '<link rel="canonical"')
+
+    def test_sitemap_lists_only_public_pages(self):
+        response = self.client.get(reverse('sitemap'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/xml')
+        for name in ('home', 'about', 'privacy'):
+            self.assertContains(response, f'https://testserver{reverse(name)}')
+        for private_path in ('/dashboard/', '/applications/', '/accounts/', '/interviews/'):
+            self.assertNotContains(response, private_path)
+
+    def test_robots_lists_sitemap_and_disallows_private_paths(self):
+        response = self.client.get(reverse('robots_txt'))
+        self.assertContains(response, 'Disallow: /applications/')
+        self.assertContains(response, 'Disallow: /accounts/')
+        self.assertContains(response, 'Sitemap: http://testserver/sitemap.xml')
+        self.assertEqual(response['Content-Type'], 'text/plain; charset=utf-8')

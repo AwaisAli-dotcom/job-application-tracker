@@ -16,11 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
+from django.contrib.sitemaps.views import sitemap
 from django.urls import path, include
 
 from application import auth_views as application_auth_views
+from application.seo import PublicSitemap, robots_txt
 
 urlpatterns = [
+    path('sitemap.xml', sitemap, {'sitemaps': {'public': PublicSitemap}}, name='sitemap'),
+    path('robots.txt', robots_txt, name='robots_txt'),
     path('admin/', admin.site.urls),
     path(
         'accounts/login/',

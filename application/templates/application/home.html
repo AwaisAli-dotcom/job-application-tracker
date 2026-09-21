@@ -1,14 +1,16 @@
 {% extends 'application/base.html' %}
 
 {% block title %}Job Application Tracker{% endblock %}
+{% block seo %}{% include 'application/_public_meta.html' with page_title='Job Application Tracker' description='A private workspace for tracking job applications, interviews, reminders, documents, and hiring progress.' %}{% endblock %}
 
 {% block content %}
 <div class="container home-container">
     <section class="home-hero">
-        <p class="home-kicker">Job Application Tracker</p>
-        <h1>Track every job application in one private workspace.</h1>
+        <p class="home-kicker">A private workspace for job seekers</p>
+        <h1>Job Application Tracker</h1>
         <p>
-            Save roles, follow their progress, prepare for interviews, and see how your job search is moving.
+            Track every job application in one place. Save roles, follow their progress,
+            prepare for interviews, and see how your job search is moving.
         </p>
 
         <div class="home-actions">

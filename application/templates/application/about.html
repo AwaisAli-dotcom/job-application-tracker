@@ -1,6 +1,7 @@
 {% extends 'application/base.html' %}
 
-{% block title %}About{% endblock %}
+{% block title %}About | Job Application Tracker{% endblock %}
+{% block seo %}{% include 'application/_public_meta.html' with page_title='About | Job Application Tracker' description='Learn how Job Application Tracker helps you organize applications, interviews, reminders, and job-search progress.' %}{% endblock %}
 
 {% block content %}
 <div class="container public-page">

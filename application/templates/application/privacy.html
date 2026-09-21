@@ -1,17 +1,21 @@
 {% extends 'application/base.html' %}
 
-{% block title %}Privacy{% endblock %}
+{% block title %}Privacy | Job Application Tracker{% endblock %}
+{% block seo %}{% include 'application/_public_meta.html' with page_title='Privacy | Job Application Tracker' description='How Job Application Tracker handles account details, private job-search records, essential cookies, and uploaded documents.' %}{% endblock %}
 
 {% block content %}
 <div class="container public-page">
     <h1>Privacy</h1>
-    <p>
-        Your applications, interviews, document links, reminders, and notes are private
-        to your account. Other users cannot access them by changing a page address.
-    </p>
-    <p>
-        Passwords are handled by Django's secure authentication system. Do not place
-        passwords, access tokens, or other secrets in application notes or document links.
-    </p>
+    <p>We use your username and email to manage your account and password resets. Your
+        applications, interviews, reminders, notes, and documents are stored so you can
+        organize your job search. These records are visible only after signing in to
+        your account; you can edit or delete individual records from the app.</p>
+    <p>Uploaded files are stored in private Cloudflare R2 storage. App hosting and
+        data processing use Vercel and Neon PostgreSQL. Password-reset emails are sent
+        through the configured email provider. Your password is stored as a secure hash,
+        not as plain text.</p>
+    <p>Essential session and CSRF cookies keep you signed in and protect forms. This app
+        does not use advertising cookies or third-party analytics. Please avoid putting
+        passwords or other secrets in job-search notes or document links.</p>
 </div>
 {% endblock %}

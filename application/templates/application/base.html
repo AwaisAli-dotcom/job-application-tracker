@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Job Application Tracker{% endblock %}</title>
+    {% block seo %}<meta name="robots" content="noindex, nofollow">{% endblock %}
     <meta name="theme-color" content="#315f8c">
     <link rel="stylesheet" href="{% static 'application/style.css' %}">
     <script src="{% static 'application/app.js' %}" defer></script>
@@ -50,7 +51,7 @@
     </div>
 {% endif %}
 
-<main id="main-content">
+<main id="main-content" tabindex="-1">
     {% block content %}{% endblock %}
 </main>
 
