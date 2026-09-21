@@ -57,10 +57,17 @@
             Status: {{ job.get_status_display }}
         </p>
 
-        {% if job.salary %}
+        {% if job.recruiter_name %}
             <p>
-                <strong>Salary:</strong>
-                {{ job.salary }}
+                <strong>Recruiter or Contact:</strong>
+                {{ job.recruiter_name }}
+            </p>
+        {% endif %}
+
+        {% if job.recruiter_email %}
+            <p>
+                <strong>Recruiter Email:</strong>
+                <a href="mailto:{{ job.recruiter_email }}">{{ job.recruiter_email }}</a>
             </p>
         {% endif %}
 
@@ -71,6 +78,11 @@
                 {% if job.salary_min and job.salary_max %}-{% endif %}
                 {% if job.salary_max %}{{ job.salary_max }}{% endif %}
                 {{ job.currency }}
+            </p>
+        {% elif job.salary %}
+            <p>
+                <strong>Salary:</strong>
+                {{ job.salary }}
             </p>
         {% endif %}
 

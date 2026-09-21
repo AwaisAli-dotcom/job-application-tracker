@@ -62,8 +62,9 @@ class JobApplicationForm(forms.ModelForm):
             'employment_type',
             'work_mode',
             'source',
+            'recruiter_name',
+            'recruiter_email',
             'status',
-            'salary',
             'salary_min',
             'salary_max',
             'currency',
@@ -77,6 +78,8 @@ class JobApplicationForm(forms.ModelForm):
             'salary_max': 'Salary maximum (optional)',
             'currency': 'Currency (optional)',
             'deadline': 'Deadline (optional)',
+            'recruiter_name': 'Recruiter or contact name (optional)',
+            'recruiter_email': 'Recruiter email (optional)',
         }
         widgets = {
             'job_url': forms.TextInput(),
@@ -99,9 +102,6 @@ class JobApplicationForm(forms.ModelForm):
             'status': {
                 'required': 'Status is required.',
             },
-            'salary': {
-                'required': 'Salary is required.',
-            },
             'application_date': {
                 'required': 'Application date is required.',
             },
@@ -110,7 +110,6 @@ class JobApplicationForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['location'].required = True
-        self.fields['salary'].required = True
         self.fields['application_date'].required = True
         self.fields['currency'].required = False
         self.fields['currency'].initial = 'EUR'
@@ -157,6 +156,9 @@ class JobApplicationForm(forms.ModelForm):
         currency = self.cleaned_data.get('currency', '').strip().upper()
 
         return currency or 'EUR'
+
+    def clean_recruiter_name(self):
+        return self.cleaned_data.get('recruiter_name', '').strip()
 
     def clean(self):
         cleaned_data = super().clean()

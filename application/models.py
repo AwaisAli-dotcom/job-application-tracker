@@ -3,6 +3,7 @@ from urllib.parse import urlsplit
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.utils import timezone
 
 
@@ -94,6 +95,15 @@ class JobApplication(models.Model):
         blank=True
     )
 
+    recruiter_name = models.CharField(
+        max_length=150,
+        blank=True
+    )
+
+    recruiter_email = models.EmailField(
+        blank=True
+    )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -121,7 +131,13 @@ class JobApplication(models.Model):
 
     currency = models.CharField(
         max_length=3,
-        default='EUR'
+        default='EUR',
+        validators=[
+            RegexValidator(
+                regex=r'^[A-Za-z]{3}$',
+                message='Enter a three-letter currency code, such as EUR or USD.',
+            )
+        ]
     )
 
     application_date = models.DateField(
@@ -183,6 +199,11 @@ class JobApplication(models.Model):
 
         self.company = (self.company or '').strip()
         self.job_title = (self.job_title or '').strip()
+        self.location = (self.location or '').strip()
+        self.source = (self.source or '').strip()
+        self.recruiter_name = (self.recruiter_name or '').strip()
+        self.recruiter_email = (self.recruiter_email or '').strip().lower()
+        self.currency = (self.currency or 'EUR').strip().upper()
 
         if self.job_url and urlsplit(self.job_url).scheme.lower() not in {'http', 'https'}:
             errors['job_url'] = 'Enter a valid job URL using http:// or https://.'

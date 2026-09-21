@@ -560,6 +560,8 @@ class JobApplicationDetailTests(TestCase):
             employment_type='full_time',
             work_mode='remote',
             source='LinkedIn',
+            recruiter_name='Morgan Recruiter',
+            recruiter_email='morgan@example.com',
             status='interview',
             salary='50000',
             salary_min='45000',
@@ -612,8 +614,9 @@ class JobApplicationDetailTests(TestCase):
         self.assertContains(response, 'Full-time')
         self.assertContains(response, 'Remote')
         self.assertContains(response, 'LinkedIn')
+        self.assertContains(response, 'Morgan Recruiter')
+        self.assertContains(response, 'morgan@example.com')
         self.assertContains(response, 'Interview')
-        self.assertContains(response, '50000')
         self.assertContains(response, '45000.00')
         self.assertContains(response, '55000.00')
         self.assertContains(response, 'EUR')
@@ -627,6 +630,19 @@ class JobApplicationDetailTests(TestCase):
 
         self.assertContains(response, 'Edit Job Application')
         self.assertContains(response, 'Save Changes')
+
+    def test_legacy_salary_remains_visible_without_structured_values(self):
+        self.application.salary_min = None
+        self.application.salary_max = None
+        self.application.save(update_fields=['salary_min', 'salary_max'])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse('application_detail', args=[self.application.pk])
+        )
+
+        self.assertContains(response, 'Salary:')
+        self.assertContains(response, '50000')
 
     def test_status_history_appears_on_detail_page(self):
         StatusHistory.objects.create(
@@ -1836,8 +1852,9 @@ class JobApplicationFormValidationTests(TestCase):
             'employment_type': 'full_time',
             'work_mode': 'remote',
             'source': 'LinkedIn',
+            'recruiter_name': 'Alex Recruiter',
+            'recruiter_email': 'alex@example.com',
             'status': 'applied',
-            'salary': '2500-3000 EUR',
             'salary_min': '2500',
             'salary_max': '3000',
             'currency': 'EUR',
@@ -1896,11 +1913,10 @@ class JobApplicationFormValidationTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors['location'], ['Location is required.'])
 
-    def test_blank_salary_rejected(self):
-        form = JobApplicationForm(data=self.valid_form_data(salary=''))
+    def test_legacy_salary_field_is_not_user_editable(self):
+        form = JobApplicationForm()
 
-        self.assertFalse(form.is_valid())
-        self.assertEqual(form.errors['salary'], ['Salary is required.'])
+        self.assertNotIn('salary', form.fields)
 
     def test_blank_application_date_rejected(self):
         form = JobApplicationForm(data=self.valid_form_data(application_date=''))
@@ -1951,6 +1967,19 @@ class JobApplicationFormValidationTests(TestCase):
 
     def test_blank_structured_salary_fields_allowed(self):
         form = JobApplicationForm(data=self.valid_form_data(salary_min='', salary_max=''))
+
+        self.assertTrue(form.is_valid())
+
+    def test_invalid_recruiter_email_rejected(self):
+        form = JobApplicationForm(data=self.valid_form_data(recruiter_email='not an email'))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('recruiter_email', form.errors)
+
+    def test_optional_recruiter_fields_can_be_blank(self):
+        form = JobApplicationForm(
+            data=self.valid_form_data(recruiter_name='', recruiter_email='')
+        )
 
         self.assertTrue(form.is_valid())
 
@@ -2008,6 +2037,13 @@ class JobApplicationFormValidationTests(TestCase):
                 company='Trimmed Company'
             ).exists()
         )
+        created_application = JobApplication.objects.get(
+            user=self.user,
+            company='Trimmed Company',
+        )
+        self.assertEqual(created_application.salary, '')
+        self.assertEqual(created_application.recruiter_name, 'Alex Recruiter')
+        self.assertEqual(created_application.recruiter_email, 'alex@example.com')
 
     def test_invalid_edit_does_not_corrupt_existing_application(self):
         self.client.login(username='formuser', password='testpass123')
