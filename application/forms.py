@@ -1,11 +1,20 @@
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
+from django.core.files.uploadedfile import UploadedFile
+from django.utils.text import get_valid_filename
 from django.utils import timezone
 
-from .models import ApplicationDocument, Interview, JobApplication, Reminder
+from .models import (
+    ApplicationDocument,
+    Interview,
+    JobApplication,
+    Reminder,
+    document_content_type,
+)
 
 
 User = get_user_model()
@@ -224,13 +233,21 @@ class ApplicationDocumentForm(forms.ModelForm):
         fields = [
             'title',
             'document_type',
+            'file',
             'link',
             'notes',
         ]
         labels = {
+            'file': 'File (optional)',
             'link': 'Document link (optional)',
         }
+        help_texts = {
+            'file': 'PDF, Word, OpenDocument, RTF, text, PNG, or JPEG; maximum 10 MB.',
+        }
         widgets = {
+            'file': forms.ClearableFileInput(
+                attrs={'accept': '.pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg'}
+            ),
             'link': forms.TextInput(),
         }
         error_messages = {
@@ -247,6 +264,26 @@ class ApplicationDocumentForm(forms.ModelForm):
             self.cleaned_data.get('link', ''),
             'Enter a valid document link using http:// or https://.',
         )
+
+    def save(self, commit=True):
+        document = super().save(commit=False)
+        uploaded_file = self.cleaned_data.get('file')
+
+        if isinstance(uploaded_file, UploadedFile):
+            document.original_filename = get_valid_filename(
+                Path(uploaded_file.name).name
+            )[:255]
+            document.file_size = uploaded_file.size
+            document.content_type = document_content_type(uploaded_file.name)
+        elif not uploaded_file:
+            document.original_filename = ''
+            document.file_size = None
+            document.content_type = ''
+
+        if commit:
+            document.save()
+
+        return document
 
 
 class ReminderForm(forms.ModelForm):

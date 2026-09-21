@@ -18,6 +18,7 @@ urlpatterns = [
     path('applications/<int:application_pk>/documents/add/', views.document_create, name='document_create'),
     path('applications/<int:application_pk>/reminders/add/', views.reminder_create, name='reminder_create'),
     path('documents/<int:pk>/edit/', views.document_update, name='document_update'),
+    path('documents/<int:pk>/download/', views.document_download, name='document_download'),
     path('documents/<int:pk>/delete/', views.document_delete, name='document_delete'),
     path('interviews/<int:pk>/edit/', views.interview_update, name='interview_update'),
     path('interviews/<int:pk>/delete/', views.interview_delete, name='interview_delete'),

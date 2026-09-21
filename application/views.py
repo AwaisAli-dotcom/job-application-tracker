@@ -8,7 +8,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.utils import timezone
@@ -505,7 +505,7 @@ def document_create(request, application_pk):
     )
 
     if request.method == 'POST':
-        form = ApplicationDocumentForm(request.POST)
+        form = ApplicationDocumentForm(request.POST, request.FILES)
 
         if form.is_valid():
             document = form.save(commit=False)
@@ -563,7 +563,7 @@ def document_update(request, pk):
     )
 
     if request.method == 'POST':
-        form = ApplicationDocumentForm(request.POST, instance=document)
+        form = ApplicationDocumentForm(request.POST, request.FILES, instance=document)
 
         if form.is_valid():
             form.save()
@@ -583,6 +583,38 @@ def document_update(request, pk):
             'document': document,
         }
     )
+
+
+@login_required
+def document_download(request, pk):
+    document = get_object_or_404(
+        ApplicationDocument.objects.select_related('application'),
+        pk=pk,
+        user=request.user,
+        application__user=request.user,
+    )
+
+    if not document.file:
+        raise Http404('This document does not have an uploaded file.')
+
+    if not document.file.storage.exists(document.file.name):
+        raise Http404('The uploaded file could not be found.')
+
+    try:
+        file_handle = document.file.open('rb')
+    except OSError as error:
+        raise Http404('The uploaded file could not be opened.') from error
+
+    response = FileResponse(
+        file_handle,
+        as_attachment=True,
+        filename=document.original_filename or document.title,
+        content_type=document.content_type or 'application/octet-stream',
+    )
+    response['Cache-Control'] = 'private, no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
+
+    return response
 
 
 @login_required

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'storages',
     'application',
 ]
 
@@ -165,17 +166,70 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 CSRF_FAILURE_VIEW = 'application.views.csrf_failure'
 
-if not DEBUG and not TESTING:
-    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+if TESTING:
+    STORAGES = {
+        'default': {
+            'BACKEND': 'django.core.files.storage.InMemoryStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
+elif DEBUG:
     STORAGES = {
         'default': {
             'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        },
+        'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        },
+    }
+else:
+    r2_settings = {
+        'access_key': os.getenv('R2_ACCESS_KEY_ID'),
+        'secret_key': os.getenv('R2_SECRET_ACCESS_KEY'),
+        'bucket_name': os.getenv('R2_BUCKET_NAME'),
+        'endpoint_url': os.getenv('R2_ENDPOINT_URL'),
+    }
+
+    r2_configured = all(r2_settings.values())
+
+    if not r2_configured and (any(r2_settings.values()) or os.getenv('VERCEL')):
+        raise ImproperlyConfigured(
+            'R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, and '
+            'R2_ENDPOINT_URL must be set when DEBUG=False.'
+        )
+
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    STORAGES = {
+        'default': {
+            'BACKEND': (
+                'storages.backends.s3.S3Storage'
+                if r2_configured
+                else 'django.core.files.storage.FileSystemStorage'
+            ),
+            **(
+                {
+                    'OPTIONS': {
+                        **r2_settings,
+                        'region_name': 'auto',
+                        'default_acl': None,
+                        'file_overwrite': False,
+                        'querystring_auth': True,
+                        'querystring_expire': 300,
+                    }
+                }
+                if r2_configured
+                else {}
+            ),
         },
         'staticfiles': {
             'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',

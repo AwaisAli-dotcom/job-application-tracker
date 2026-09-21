@@ -1,10 +1,96 @@
+from pathlib import Path
 from urllib.parse import urlsplit
+from uuid import uuid4
+from zipfile import BadZipFile, ZipFile
 
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils import timezone
+
+
+MAX_DOCUMENT_FILE_SIZE = 10 * 1024 * 1024
+DOCUMENT_CONTENT_TYPES = {
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.jpeg': 'image/jpeg',
+    '.jpg': 'image/jpeg',
+    '.odt': 'application/vnd.oasis.opendocument.text',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.rtf': 'application/rtf',
+    '.txt': 'text/plain',
+}
+
+
+def document_content_type(filename):
+    return DOCUMENT_CONTENT_TYPES.get(Path(filename).suffix.lower(), 'application/octet-stream')
+
+
+def document_upload_path(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return (
+        f'documents/user_{instance.user_id}/application_{instance.application_id}/'
+        f'{uuid4().hex}{extension}'
+    )
+
+
+def validate_document_file(uploaded_file):
+    extension = Path(uploaded_file.name).suffix.lower()
+
+    if extension not in DOCUMENT_CONTENT_TYPES:
+        raise ValidationError(
+            'Upload a PDF, Word, OpenDocument, RTF, text, PNG, or JPEG file.'
+        )
+
+    if uploaded_file.size > MAX_DOCUMENT_FILE_SIZE:
+        raise ValidationError('Document files must be 10 MB or smaller.')
+
+    original_position = uploaded_file.tell() if hasattr(uploaded_file, 'tell') else 0
+
+    try:
+        uploaded_file.seek(0)
+        header = uploaded_file.read(4096)
+
+        if header.startswith((b'MZ', b'\x7fELF')):
+            raise ValidationError('Executable files are not allowed.')
+
+        valid_content = False
+
+        if extension == '.pdf':
+            valid_content = header.startswith(b'%PDF-')
+        elif extension == '.png':
+            valid_content = header.startswith(b'\x89PNG\r\n\x1a\n')
+        elif extension in {'.jpg', '.jpeg'}:
+            valid_content = header.startswith(b'\xff\xd8\xff')
+        elif extension == '.doc':
+            valid_content = header.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1')
+        elif extension == '.rtf':
+            valid_content = header.lstrip().startswith(b'{\\rtf')
+        elif extension == '.txt':
+            valid_content = b'\x00' not in header
+        elif extension in {'.docx', '.odt'}:
+            uploaded_file.seek(0)
+            try:
+                with ZipFile(uploaded_file) as archive:
+                    names = set(archive.namelist())
+                    if extension == '.docx':
+                        valid_content = '[Content_Types].xml' in names and any(
+                            name.startswith('word/') for name in names
+                        )
+                    else:
+                        valid_content = 'mimetype' in names and (
+                            archive.read('mimetype')
+                            == b'application/vnd.oasis.opendocument.text'
+                        )
+            except (BadZipFile, KeyError):
+                valid_content = False
+
+        if not valid_content:
+            raise ValidationError('The file contents do not match the selected file type.')
+    finally:
+        uploaded_file.seek(original_position)
 
 
 def validate_company_name(value):
@@ -350,6 +436,7 @@ class ApplicationDocument(models.Model):
     DOCUMENT_TYPE_CHOICES = [
         ('cv', 'CV'),
         ('cover_letter', 'Cover Letter'),
+        ('certificate', 'Certificate'),
         ('portfolio', 'Portfolio'),
         ('other', 'Other'),
     ]
@@ -371,6 +458,15 @@ class ApplicationDocument(models.Model):
         default='cv'
     )
     link = models.URLField(blank=True)
+    file = models.FileField(
+        upload_to=document_upload_path,
+        validators=[validate_document_file],
+        max_length=500,
+        blank=True,
+    )
+    original_filename = models.CharField(max_length=255, blank=True)
+    file_size = models.PositiveIntegerField(null=True, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

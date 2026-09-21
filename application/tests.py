@@ -3,13 +3,21 @@ from datetime import datetime, timedelta, timezone
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone as django_timezone
 
 from .forms import JobApplicationForm
-from .models import ApplicationDocument, Interview, JobApplication, Reminder, StatusHistory
+from .models import (
+    MAX_DOCUMENT_FILE_SIZE,
+    ApplicationDocument,
+    Interview,
+    JobApplication,
+    Reminder,
+    StatusHistory,
+)
 
 
 class AuthenticationTests(TestCase):
@@ -1119,6 +1127,9 @@ class DocumentReminderTests(TestCase):
         data.update(overrides)
         return data
 
+    def pdf_upload(self, name='candidate-cv.pdf', content=b'%PDF-1.4\n%%EOF'):
+        return SimpleUploadedFile(name, content, content_type='application/pdf')
+
     def test_owner_can_create_document_metadata(self):
         self.client.login(username='metadatauser', password='testpass123')
 
@@ -1138,6 +1149,176 @@ class DocumentReminderTests(TestCase):
                 title='Cover Letter v1'
             ).exists()
         )
+
+    def test_owner_can_upload_private_document(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(
+                title='Uploaded CV',
+                link='',
+                file=self.pdf_upload('Awais CV 2026.pdf'),
+            ),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk]),
+        )
+        document = ApplicationDocument.objects.get(title='Uploaded CV')
+        self.assertEqual(document.original_filename, 'Awais_CV_2026.pdf')
+        self.assertEqual(document.file_size, len(b'%PDF-1.4\n%%EOF'))
+        self.assertEqual(document.content_type, 'application/pdf')
+        self.assertNotIn('Awais_CV_2026', document.file.name)
+        self.assertTrue(document.file.name.startswith(
+            f'documents/user_{self.user.pk}/application_{self.application.pk}/'
+        ))
+
+    def test_document_upload_rejects_unsupported_file_type(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(
+                file=SimpleUploadedFile(
+                    'program.exe',
+                    b'MZ executable content',
+                    content_type='application/octet-stream',
+                ),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Upload a PDF, Word, OpenDocument, RTF, text, PNG, or JPEG file.',
+        )
+
+    def test_document_upload_rejects_disguised_executable(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(
+                file=self.pdf_upload('malware.pdf', b'MZ executable content'),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Executable files are not allowed.')
+
+    def test_document_upload_rejects_file_over_size_limit(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(
+                file=self.pdf_upload(
+                    content=b'%PDF-' + b'0' * MAX_DOCUMENT_FILE_SIZE,
+                ),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Document files must be 10 MB or smaller.')
+
+    def test_owner_can_download_uploaded_document(self):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(
+                title='Downloadable CV',
+                file=self.pdf_upload(),
+            ),
+        )
+        document = ApplicationDocument.objects.get(title='Downloadable CV')
+
+        response = self.client.get(reverse('document_download', args=[document.pk]))
+        content = b''.join(response.streaming_content)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(content, b'%PDF-1.4\n%%EOF')
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertEqual(response['Cache-Control'], 'private, no-store')
+        self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
+        self.assertIn('attachment;', response['Content-Disposition'])
+        self.assertIn('candidate-cv.pdf', response['Content-Disposition'])
+
+    def test_anonymous_user_is_redirected_from_document_download(self):
+        response = self.client.get(reverse('document_download', args=[self.document.pk]))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('document_download', args=[self.document.pk])}",
+        )
+
+    def test_user_cannot_download_another_users_document(self):
+        self.hidden_document.file = self.pdf_upload('hidden.pdf')
+        self.hidden_document.original_filename = 'hidden.pdf'
+        self.hidden_document.file_size = len(b'%PDF-1.4\n%%EOF')
+        self.hidden_document.content_type = 'application/pdf'
+        self.hidden_document.save()
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse('document_download', args=[self.hidden_document.pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_document_without_file_cannot_be_downloaded(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('document_download', args=[self.document.pk]))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_replacing_document_removes_old_stored_file(self):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(title='Replaceable CV', file=self.pdf_upload('old.pdf')),
+        )
+        document = ApplicationDocument.objects.get(title='Replaceable CV')
+        old_name = document.file.name
+        storage = document.file.storage
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('document_update', args=[document.pk]),
+                self.document_form_data(
+                    title='Replaceable CV',
+                    file=self.pdf_upload('new.pdf', b'%PDF-1.5\n%%EOF'),
+                ),
+            )
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk]),
+        )
+        document.refresh_from_db()
+        self.assertFalse(storage.exists(old_name))
+        self.assertTrue(storage.exists(document.file.name))
+
+    def test_deleting_document_removes_stored_file(self):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(title='Temporary CV', file=self.pdf_upload()),
+        )
+        document = ApplicationDocument.objects.get(title='Temporary CV')
+        name = document.file.name
+        storage = document.file.storage
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('document_delete', args=[document.pk]))
+
+        self.assertRedirects(
+            response,
+            reverse('application_detail', args=[self.application.pk]),
+        )
+        self.assertFalse(storage.exists(name))
 
     def test_user_cannot_create_document_for_another_users_application(self):
         self.client.login(username='metadatauser', password='testpass123')

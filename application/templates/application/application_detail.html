@@ -163,6 +163,9 @@
             <p>
                 <strong>{{ document.title }}</strong>
                 - {{ document.get_document_type_display }}
+                {% if document.file %}
+                    <span>{{ document.original_filename }} ({{ document.file_size|filesizeformat }})</span>
+                {% endif %}
                 {% if document.link %}
                     <span><a href="{{ document.link }}" target="_blank" rel="noopener noreferrer">{{ document.link }}</a></span>
                 {% endif %}
@@ -171,6 +174,9 @@
                 {% endif %}
             </p>
             <div class="card-actions">
+                {% if document.file %}
+                    <a class="view-link" href="{% url 'document_download' document.pk %}">Download</a>
+                {% endif %}
                 <a class="edit-link" href="{% url 'document_update' document.pk %}">Edit</a>
                 <a class="delete-link" href="{% url 'document_delete' document.pk %}">Delete</a>
             </div>

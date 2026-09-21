@@ -9,7 +9,7 @@
         Back to Application
     </a>
 
-    <form method="POST" class="form-card">
+    <form method="POST" enctype="multipart/form-data" class="form-card">
         {% csrf_token %}
         <p class="required-note"><span class="required-marker">*</span> Required fields</p>
         {% include 'application/_form_fields.html' %}
