@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -18,8 +19,10 @@ from .models import (
     Interview,
     JobApplication,
     Reminder,
+    RequestThrottle,
     StatusHistory,
 )
+from .throttling import consume_request_limit, get_client_ip
 
 
 class AuthenticationTests(TestCase):
@@ -315,6 +318,109 @@ class PasswordManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'This reset link is invalid or has expired.')
         self.assertNotContains(response, 'Set New Password')
+
+
+class AuthenticationRateLimitTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='ratelimituser',
+            email='ratelimit@example.com',
+            password='RateLimitPass123!',
+        )
+
+    @override_settings(AXES_ENABLED=True)
+    def test_failed_logins_are_temporarily_limited(self):
+        from axes.models import AccessAttempt
+
+        for _ in range(settings.AXES_FAILURE_LIMIT):
+            response = self.client.post(
+                reverse('login'),
+                {
+                    'username': self.user.username,
+                    'password': 'wrong-password',
+                },
+            )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, 'Too many attempts', status_code=429)
+        self.assertNotIn('wrong-password', AccessAttempt.objects.first().post_data)
+
+        response = self.client.post(
+            reverse('login'),
+            {
+                'username': self.user.username,
+                'password': 'RateLimitPass123!',
+            },
+        )
+
+        self.assertEqual(response.status_code, 429)
+
+    def test_registration_is_limited_after_five_posts(self):
+        for _ in range(5):
+            response = self.client.post(reverse('register'), {})
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(reverse('register'), {})
+
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, 'Too many attempts', status_code=429)
+        self.assertIn('Retry-After', response)
+
+    def test_password_reset_request_is_limited_by_email(self):
+        for _ in range(5):
+            response = self.client.post(
+                reverse('password_reset'),
+                {'email': self.user.email},
+            )
+            self.assertRedirects(response, reverse('password_reset_done'))
+
+        response = self.client.post(
+            reverse('password_reset'),
+            {'email': self.user.email},
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(len(mail.outbox), 5)
+
+    def test_rate_limit_identifiers_are_hashed(self):
+        consume_request_limit('privacy_test', self.user.email, 5, 3600)
+
+        throttle = RequestThrottle.objects.get(scope='privacy_test')
+        self.assertNotEqual(throttle.identifier_hash, self.user.email)
+        self.assertEqual(len(throttle.identifier_hash), 64)
+
+    def test_expired_rate_limit_window_starts_again(self):
+        consume_request_limit('window_test', '127.0.0.1', 1, 60)
+        throttle = RequestThrottle.objects.get(scope='window_test')
+        throttle.window_started = django_timezone.now() - timedelta(minutes=2)
+        throttle.save(update_fields=['window_started'])
+
+        retry_after = consume_request_limit('window_test', '127.0.0.1', 1, 60)
+
+        self.assertIsNone(retry_after)
+        throttle.refresh_from_db()
+        self.assertEqual(throttle.request_count, 1)
+
+    @override_settings(TRUST_VERCEL_PROXY=True)
+    def test_vercel_client_ip_uses_trusted_platform_header(self):
+        response = self.client.get(
+            reverse('home'),
+            HTTP_X_VERCEL_FORWARDED_FOR='203.0.113.8',
+            REMOTE_ADDR='127.0.0.1',
+        )
+
+        self.assertEqual(get_client_ip(response.wsgi_request), '203.0.113.8')
+
+    @override_settings(TRUST_VERCEL_PROXY=False)
+    def test_untrusted_forwarded_header_is_ignored_locally(self):
+        response = self.client.get(
+            reverse('home'),
+            HTTP_X_VERCEL_FORWARDED_FOR='203.0.113.8',
+            REMOTE_ADDR='127.0.0.1',
+        )
+
+        self.assertEqual(get_client_ip(response.wsgi_request), '127.0.0.1')
 
 
 class DashboardTests(TestCase):
@@ -1350,7 +1456,26 @@ class DocumentReminderTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Document files must be 10 MB or smaller.')
+        self.assertContains(response, 'Document files must be 4 MB or smaller.')
+
+    @override_settings(R2_STORAGE_ENABLED=True)
+    def test_production_download_redirects_to_short_lived_storage_url(self):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('document_create', args=[self.application.pk]),
+            self.document_form_data(title='R2 CV', file=self.pdf_upload()),
+        )
+        document = ApplicationDocument.objects.get(title='R2 CV')
+        signed_url = 'https://storage.example.invalid/private-file?signature=temporary'
+
+        with (
+            patch.object(document.file.storage, 'exists', return_value=True),
+            patch.object(document.file.storage, 'url', return_value=signed_url),
+        ):
+            response = self.client.get(reverse('document_download', args=[document.pk]))
+
+        self.assertRedirects(response, signed_url, fetch_redirect_response=False)
+        self.assertEqual(response['Cache-Control'], 'private, no-store')
 
     def test_owner_can_download_uploaded_document(self):
         self.client.force_login(self.user)

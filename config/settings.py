@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 import os
 import sys
@@ -61,6 +62,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'axes',
     'storages',
     'application',
 ]
@@ -73,7 +75,32 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',
 ]
+
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+AXES_FAILURE_LIMIT = 5
+AXES_ENABLED = not TESTING
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_USE_ATTEMPT_EXPIRATION = True
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+AXES_HTTP_RESPONSE_CODE = 429
+AXES_LOCKOUT_TEMPLATE = '429.html'
+TRUST_VERCEL_PROXY = bool(os.getenv('VERCEL'))
+
+if TRUST_VERCEL_PROXY:
+    AXES_IPWARE_META_PRECEDENCE_ORDER = (
+        'HTTP_X_VERCEL_FORWARDED_FOR',
+        'HTTP_X_REAL_IP',
+        'REMOTE_ADDR',
+    )
+else:
+    AXES_IPWARE_META_PRECEDENCE_ORDER = ('REMOTE_ADDR',)
 
 ROOT_URLCONF = 'config.urls'
 
@@ -173,6 +200,7 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 CSRF_FAILURE_VIEW = 'application.views.csrf_failure'
+R2_STORAGE_ENABLED = False
 
 if TESTING:
     STORAGES = {
@@ -201,6 +229,7 @@ else:
     }
 
     r2_configured = all(r2_settings.values())
+    R2_STORAGE_ENABLED = r2_configured
 
     if not r2_configured and (any(r2_settings.values()) or os.getenv('VERCEL')):
         raise ImproperlyConfigured(

@@ -2,6 +2,7 @@ import csv
 from collections import Counter
 from datetime import date
 
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import login
@@ -25,6 +26,7 @@ from .forms import (
     RegistrationForm,
     ReminderForm,
 )
+from .throttling import limit_registration_requests
 
 
 def home(request):
@@ -47,6 +49,7 @@ def csrf_failure(request, reason=''):
     return render(request, '403.html', status=403)
 
 
+@limit_registration_requests
 def register(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
@@ -56,7 +59,7 @@ def register(request):
 
         if form.is_valid():
             user = form.save()
-            login(request, user)
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, 'Your account has been created.')
 
             return redirect('dashboard')
@@ -599,6 +602,12 @@ def document_download(request, pk):
 
     if not document.file.storage.exists(document.file.name):
         raise Http404('The uploaded file could not be found.')
+
+    if settings.R2_STORAGE_ENABLED:
+        response = redirect(document.file.url)
+        response['Cache-Control'] = 'private, no-store'
+
+        return response
 
     try:
         file_handle = document.file.open('rb')

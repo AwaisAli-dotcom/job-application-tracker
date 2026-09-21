@@ -242,7 +242,7 @@ class ApplicationDocumentForm(forms.ModelForm):
             'link': 'Document link (optional)',
         }
         help_texts = {
-            'file': 'PDF, Word, OpenDocument, RTF, text, PNG, or JPEG; maximum 10 MB.',
+            'file': 'PDF, Word, OpenDocument, RTF, text, PNG, or JPEG; maximum 4 MB.',
         }
         widgets = {
             'file': forms.ClearableFileInput(

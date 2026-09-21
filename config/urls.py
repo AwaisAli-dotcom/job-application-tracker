@@ -18,6 +18,8 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path, include
 
+from application import auth_views as application_auth_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path(
@@ -42,7 +44,7 @@ urlpatterns = [
     ),
     path(
         'accounts/password_reset/',
-        auth_views.PasswordResetView.as_view(
+        application_auth_views.RateLimitedPasswordResetView.as_view(
             template_name='application/auth/password_reset_form.html',
             email_template_name='application/auth/password_reset_email.html',
             subject_template_name='application/auth/password_reset_subject.txt',
@@ -58,7 +60,7 @@ urlpatterns = [
     ),
     path(
         'accounts/reset/<uidb64>/<token>/',
-        auth_views.PasswordResetConfirmView.as_view(
+        application_auth_views.RateLimitedPasswordResetConfirmView.as_view(
             template_name='application/auth/password_reset_confirm.html'
         ),
         name='password_reset_confirm',

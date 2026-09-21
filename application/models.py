@@ -6,11 +6,11 @@ from zipfile import BadZipFile, ZipFile
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MaxLengthValidator, RegexValidator
 from django.utils import timezone
 
 
-MAX_DOCUMENT_FILE_SIZE = 10 * 1024 * 1024
+MAX_DOCUMENT_FILE_SIZE = 4 * 1024 * 1024
 DOCUMENT_CONTENT_TYPES = {
     '.doc': 'application/msword',
     '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -45,7 +45,7 @@ def validate_document_file(uploaded_file):
         )
 
     if uploaded_file.size > MAX_DOCUMENT_FILE_SIZE:
-        raise ValidationError('Document files must be 10 MB or smaller.')
+        raise ValidationError('Document files must be 4 MB or smaller.')
 
     original_position = uploaded_file.tell() if hasattr(uploaded_file, 'tell') else 0
 
@@ -111,6 +111,24 @@ def validate_job_title(value):
 
     if len(value) < 2:
         raise ValidationError('Job title must be at least 2 characters.')
+
+
+class RequestThrottle(models.Model):
+    scope = models.CharField(max_length=50)
+    identifier_hash = models.CharField(max_length=64)
+    window_started = models.DateTimeField()
+    request_count = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['scope', 'identifier_hash'],
+                name='request_throttle_scope_identifier_unique',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['window_started'], name='request_throttle_window_idx'),
+        ]
 
 
 class JobApplication(models.Model):
@@ -240,7 +258,8 @@ class JobApplication(models.Model):
     )
 
     notes = models.TextField(
-        blank=True
+        blank=True,
+        validators=[MaxLengthValidator(5000)],
     )
 
     created_at = models.DateTimeField(
@@ -410,7 +429,8 @@ class Interview(models.Model):
         blank=True
     )
     notes = models.TextField(
-        blank=True
+        blank=True,
+        validators=[MaxLengthValidator(5000)],
     )
     created_at = models.DateTimeField(
         auto_now_add=True
@@ -467,7 +487,7 @@ class ApplicationDocument(models.Model):
     original_filename = models.CharField(max_length=255, blank=True)
     file_size = models.PositiveIntegerField(null=True, blank=True)
     content_type = models.CharField(max_length=100, blank=True)
-    notes = models.TextField(blank=True)
+    notes = models.TextField(blank=True, validators=[MaxLengthValidator(5000)])
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -497,7 +517,7 @@ class Reminder(models.Model):
     title = models.CharField(max_length=150)
     due_at = models.DateTimeField()
     completed = models.BooleanField(default=False)
-    notes = models.TextField(blank=True)
+    notes = models.TextField(blank=True, validators=[MaxLengthValidator(5000)])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

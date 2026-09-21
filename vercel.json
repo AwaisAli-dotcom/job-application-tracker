@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "if [ \"$VERCEL_ENV\" = \"production\" ]; then test -n \"$DATABASE_URL\" && python manage.py migrate --noinput || exit 1; fi; python manage.py collectstatic --noinput"
+}
