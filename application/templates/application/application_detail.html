@@ -148,8 +148,8 @@
                 {% endif %}
             </p>
             <div class="card-actions">
-                <a class="edit-link" href="{% url 'interview_update' interview.pk %}">Edit</a>
-                <a class="delete-link" href="{% url 'interview_delete' interview.pk %}">Delete</a>
+                <a class="edit-link" href="{% url 'interview_update' interview.pk %}" aria-label="Edit {{ interview.get_interview_type_display }} interview at {{ job.company }}">Edit</a>
+                <a class="delete-link" href="{% url 'interview_delete' interview.pk %}" aria-label="Delete {{ interview.get_interview_type_display }} interview at {{ job.company }}">Delete</a>
             </div>
         {% empty %}
             <p>No interviews recorded yet.</p>
@@ -175,10 +175,10 @@
             </p>
             <div class="card-actions">
                 {% if document.file %}
-                    <a class="view-link" href="{% url 'document_download' document.pk %}">Download</a>
+                    <a class="view-link" href="{% url 'document_download' document.pk %}" aria-label="Download {{ document.title }}">Download</a>
                 {% endif %}
-                <a class="edit-link" href="{% url 'document_update' document.pk %}">Edit</a>
-                <a class="delete-link" href="{% url 'document_delete' document.pk %}">Delete</a>
+                <a class="edit-link" href="{% url 'document_update' document.pk %}" aria-label="Edit {{ document.title }} document">Edit</a>
+                <a class="delete-link" href="{% url 'document_delete' document.pk %}" aria-label="Delete {{ document.title }} document">Delete</a>
             </div>
         {% empty %}
             <p>No documents recorded yet.</p>
@@ -200,8 +200,8 @@
                 {% endif %}
             </p>
             <div class="card-actions">
-                <a class="edit-link" href="{% url 'reminder_update' reminder.pk %}">Edit</a>
-                <a class="delete-link" href="{% url 'reminder_delete' reminder.pk %}">Delete</a>
+                <a class="edit-link" href="{% url 'reminder_update' reminder.pk %}" aria-label="Edit {{ reminder.title }} reminder">Edit</a>
+                <a class="delete-link" href="{% url 'reminder_delete' reminder.pk %}" aria-label="Delete {{ reminder.title }} reminder">Delete</a>
             </div>
         {% empty %}
             <p>No reminders recorded yet.</p>

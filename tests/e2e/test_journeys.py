@@ -154,11 +154,17 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page).to_have_url(re.compile(r'/applications/$'))
         card = self.page.locator('.job-card').filter(has_text=company)
         expect(card).to_be_visible()
-        card.get_by_role('link', name='View').click()
+        card.get_by_role('link', name=f'View {company} application for Python Developer').click()
         expect(self.page.get_by_role('heading', name=company)).to_be_visible()
         return urlparse(self.page.url).path
 
     def test_public_pages_and_mobile_layout(self):
+        self.page.goto('/')
+        self.page.keyboard.press('Tab')
+        expect(self.page.locator('.skip-link')).to_be_focused()
+        self.page.keyboard.press('Enter')
+        expect(self.page.locator('#main-content')).to_be_focused()
+
         for path, title in (('/', 'Job Application Tracker'), ('/about/', 'About'), ('/privacy/', 'Privacy')):
             self.page.goto(path)
             expect(self.page.get_by_role('heading', name=title, exact=True)).to_be_visible()
@@ -247,6 +253,25 @@ class BrowserJourneys(unittest.TestCase):
 
     def test_application_workflow(self):
         self.register()
+        self.page.goto('/add/')
+        self.page.locator('[name="company"]').fill('Validation preview')
+        self.page.locator('[name="job_title"]').fill('Python Developer')
+        self.page.locator('[name="location"]').fill('Vilnius')
+        self.page.locator('[name="application_date"]').fill(
+            datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+        )
+        self.page.locator('[name="job_url"]').fill('not a url')
+        self.page.get_by_role('button', name='Save Application').click()
+        invalid_url = self.page.locator('[name="job_url"]')
+        expect(invalid_url).to_have_attribute('aria-invalid', 'true')
+        error_id = invalid_url.get_attribute('aria-describedby')
+        self.assertIsNotNone(error_id)
+        expect(self.page.locator(f'#{error_id}')).to_contain_text('Enter a valid job URL')
+        invalid_url.fill('https://example.com/jobs/1')
+        expect(invalid_url).not_to_have_attribute('aria-invalid', 'true')
+        self.assertNotIn(error_id, invalid_url.get_attribute('aria-describedby') or '')
+        expect(self.page.locator(f'#{error_id}')).to_have_count(0)
+
         company = f'E2E Company {uuid4().hex[:6]}'
         detail_path = self.add_application(company)
         self.page.get_by_role('link', name='Edit', exact=True).first.click()
@@ -282,11 +307,11 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Save Interview').click()
         interviews = self.page.locator('.activity-card').filter(has=self.page.get_by_role('heading', name='Interviews'))
         expect(interviews).not_to_contain_text('No interviews recorded yet.')
-        interviews.get_by_role('link', name='Edit').click()
+        interviews.locator('a.edit-link').click()
         self.page.locator('[name="interviewer"]').fill('E2E Interviewer')
         self.page.get_by_role('button', name='Save Interview').click()
         expect(interviews).to_contain_text('E2E Interviewer')
-        interviews.get_by_role('link', name='Delete').click()
+        interviews.locator('a.delete-link').click()
         self.page.get_by_role('button', name='Yes, delete it').click()
         expect(interviews).to_contain_text('No interviews recorded yet.')
 
@@ -298,11 +323,11 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Save Reminder').click()
         reminders = self.page.locator('.activity-card').filter(has=self.page.get_by_role('heading', name='Reminders'))
         expect(reminders).to_contain_text('E2E follow-up')
-        reminders.get_by_role('link', name='Edit').click()
+        reminders.locator('a.edit-link').click()
         self.page.locator('[name="title"]').fill('E2E updated follow-up')
         self.page.get_by_role('button', name='Save Reminder').click()
         expect(reminders).to_contain_text('E2E updated follow-up')
-        reminders.get_by_role('link', name='Delete').click()
+        reminders.locator('a.delete-link').click()
         self.page.get_by_role('button', name='Yes, delete it').click()
         expect(reminders).to_contain_text('No reminders recorded yet.')
 
@@ -315,13 +340,13 @@ class BrowserJourneys(unittest.TestCase):
         documents = self.page.locator('.activity-card').filter(has=self.page.get_by_role('heading', name='Documents'))
         expect(documents).to_contain_text('E2E CV')
         with self.page.expect_download() as document_download:
-            documents.get_by_role('link', name='Download').click()
+            documents.get_by_role('link', name='Download E2E CV').click()
         self.assertEqual(document_download.value.suggested_filename, 'e2e-cv.txt')
-        documents.get_by_role('link', name='Edit').click()
+        documents.locator('a.edit-link').click()
         self.page.locator('[name="notes"]').fill('Updated E2E document')
         self.page.get_by_role('button', name='Save Document').click()
         expect(documents).to_contain_text('Updated E2E document')
-        documents.get_by_role('link', name='Delete').click()
+        documents.locator('a.delete-link').click()
         self.page.get_by_role('button', name='Yes, delete it').click()
         expect(documents).to_contain_text('No documents recorded yet.')
 
@@ -367,7 +392,7 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Save Reminder').click()
         reminder_href = self.page.locator('.activity-card').filter(
             has=self.page.get_by_role('heading', name='Reminders')
-        ).get_by_role('link', name='Edit').get_attribute('href')
+        ).locator('a.edit-link').get_attribute('href')
 
         self.page.get_by_role('link', name='Add Interview').click()
         self.page.locator('[name="scheduled_at"]').fill(
@@ -376,7 +401,7 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Save Interview').click()
         interview_href = self.page.locator('.activity-card').filter(
             has=self.page.get_by_role('heading', name='Interviews')
-        ).get_by_role('link', name='Edit').get_attribute('href')
+        ).locator('a.edit-link').get_attribute('href')
 
         self.page.get_by_role('link', name='Add Document').click()
         self.page.locator('[name="title"]').fill('Private E2E CV')
@@ -387,9 +412,9 @@ class BrowserJourneys(unittest.TestCase):
         private_document = self.page.locator('.activity-card').filter(
             has=self.page.get_by_role('heading', name='Documents')
         )
-        document_href = private_document.get_by_role('link', name='Download').get_attribute('href')
-        document_edit_href = private_document.get_by_role('link', name='Edit').get_attribute('href')
-        document_delete_href = private_document.get_by_role('link', name='Delete').get_attribute('href')
+        document_href = private_document.get_by_role('link', name='Download Private E2E CV').get_attribute('href')
+        document_edit_href = private_document.locator('a.edit-link').get_attribute('href')
+        document_delete_href = private_document.locator('a.delete-link').get_attribute('href')
 
         self.page.get_by_role('button', name='Log out').click()
         self.page.goto(detail_path)

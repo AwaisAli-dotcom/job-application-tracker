@@ -72,9 +72,9 @@
             </p>
 
             <div class="card-actions">
-                <a class="view-link" href="{% url 'application_detail' job.pk %}">View</a>
-                <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
-                <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
+                <a class="view-link" href="{% url 'application_detail' job.pk %}" aria-label="View {{ job.company }} application for {{ job.job_title }}">View</a>
+                <a class="edit-link" href="{% url 'application_update' job.pk %}" aria-label="Edit {{ job.company }} application for {{ job.job_title }}">Edit</a>
+                <a class="delete-link" href="{% url 'application_delete' job.pk %}" aria-label="Delete {{ job.company }} application for {{ job.job_title }}">Delete</a>
             </div>
         </div>
 

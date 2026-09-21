@@ -16,9 +16,9 @@
                         <span>{{ interview.get_interview_type_display }} - {{ interview.get_mode_display }} - {{ interview.scheduled_at }}</span>
                     </div>
                     <div class="card-actions">
-                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">Application</a>
-                        <a class="edit-link" href="{% url 'interview_update' interview.pk %}">Edit</a>
-                        <a class="delete-link" href="{% url 'interview_delete' interview.pk %}">Delete</a>
+                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}" aria-label="View {{ interview.application.company }} application">Application</a>
+                        <a class="edit-link" href="{% url 'interview_update' interview.pk %}" aria-label="Edit {{ interview.get_interview_type_display }} interview at {{ interview.application.company }}">Edit</a>
+                        <a class="delete-link" href="{% url 'interview_delete' interview.pk %}" aria-label="Delete {{ interview.get_interview_type_display }} interview at {{ interview.application.company }}">Delete</a>
                     </div>
                 </div>
             {% empty %}
@@ -37,9 +37,9 @@
                         <span>{{ interview.get_interview_type_display }} - {{ interview.get_mode_display }} - {{ interview.scheduled_at }}</span>
                     </div>
                     <div class="card-actions">
-                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">Application</a>
-                        <a class="edit-link" href="{% url 'interview_update' interview.pk %}">Edit</a>
-                        <a class="delete-link" href="{% url 'interview_delete' interview.pk %}">Delete</a>
+                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}" aria-label="View {{ interview.application.company }} application">Application</a>
+                        <a class="edit-link" href="{% url 'interview_update' interview.pk %}" aria-label="Edit {{ interview.get_interview_type_display }} interview at {{ interview.application.company }}">Edit</a>
+                        <a class="delete-link" href="{% url 'interview_delete' interview.pk %}" aria-label="Delete {{ interview.get_interview_type_display }} interview at {{ interview.application.company }}">Delete</a>
                     </div>
                 </div>
             {% empty %}

@@ -106,7 +106,7 @@
                             <strong>{{ interview.application.company }}</strong>
                             <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
                         </div>
-                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}">View</a>
+                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}" aria-label="View {{ interview.application.company }} application">View</a>
                     </div>
                 {% empty %}
                     <p>No upcoming interviews.</p>
@@ -123,7 +123,7 @@
                             <strong>{{ reminder.title }}</strong>
                             <span>{{ reminder.application.company }} - {{ reminder.due_at }}</span>
                         </div>
-                        <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}">View</a>
+                        <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}" aria-label="View {{ reminder.application.company }} application">View</a>
                     </div>
                 {% empty %}
                     <p>No upcoming reminders.</p>
@@ -140,7 +140,7 @@
                             <strong>{{ job.company }}</strong>
                             <span>{{ job.job_title }} - {{ job.deadline }}</span>
                         </div>
-                        <a class="view-link" href="{% url 'application_detail' job.pk %}">View</a>
+                        <a class="view-link" href="{% url 'application_detail' job.pk %}" aria-label="View {{ job.company }} application">View</a>
                     </div>
                 {% empty %}
                     <p>No upcoming deadlines.</p>
