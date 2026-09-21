@@ -150,7 +150,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': os.getenv('E2E_DATABASE_PATH', BASE_DIR / 'db.sqlite3') if DEBUG else BASE_DIR / 'db.sqlite3',
         }
     }
 
@@ -195,7 +195,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.getenv('E2E_MEDIA_ROOT', BASE_DIR / 'media') if DEBUG else BASE_DIR / 'media'
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
