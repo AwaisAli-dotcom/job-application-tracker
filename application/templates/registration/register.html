@@ -4,11 +4,16 @@
 
 {% block content %}
 <div class="container auth-container">
-    <h1>Create Account</h1>
+    <div class="auth-heading">
+        <p class="eyebrow">Get organized</p>
+        <h1>Create your account</h1>
+        <p>Build a private workspace for your job search.</p>
+    </div>
 
     <form method="POST" class="form-card auth-card">
         {% csrf_token %}
-        {{ form.as_p }}
+        <p class="required-note"><span class="required-marker">*</span> Required fields</p>
+        {% include 'application/_form_fields.html' %}
 
         <button type="submit">Create Account</button>
     </form>

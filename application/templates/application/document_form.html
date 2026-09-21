@@ -11,7 +11,8 @@
 
     <form method="POST" class="form-card">
         {% csrf_token %}
-        {{ form.as_p }}
+        <p class="required-note"><span class="required-marker">*</span> Required fields</p>
+        {% include 'application/_form_fields.html' %}
         <button type="submit">Save Document</button>
     </form>
 </div>

@@ -3,14 +3,25 @@
 {% block title %}Account{% endblock %}
 
 {% block content %}
-<div class="container auth-container">
-    <h1>Account</h1>
+<div class="container account-container">
+    <div class="page-heading">
+        <p class="eyebrow">Account settings</p>
+        <h1>Your account</h1>
+        <p>Keep your sign-in details accurate and up to date.</p>
+    </div>
 
-    <form method="POST" class="form-card auth-card">
-        {% csrf_token %}
-        {{ form.as_p }}
+    <section class="settings-panel" aria-labelledby="profile-heading">
+        <div class="settings-panel-heading">
+            <h2 id="profile-heading">Profile</h2>
+            <p>Update the username and email connected to your account.</p>
+        </div>
 
-        <button type="submit">Save Changes</button>
-    </form>
+        <form method="POST" class="form-card auth-card account-form">
+            {% csrf_token %}
+            {% include 'application/_form_fields.html' %}
+
+            <button type="submit">Save Changes</button>
+        </form>
+    </section>
 </div>
 {% endblock %}

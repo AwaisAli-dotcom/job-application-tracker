@@ -14,41 +14,9 @@
 
         <p class="required-note"><span class="required-marker">*</span> Required fields</p>
 
-        {% for field in form %}
-            <div class="form-field">
-                <label for="{{ field.id_for_label }}">
-                    {{ field.label }}
-                    {% if field.field.required %}
-                        <span class="required-marker" aria-hidden="true">*</span>
-                        <span class="sr-only">required</span>
-                    {% endif %}
-                </label>
-                {{ field }}
-                {{ field.errors }}
-            </div>
-        {% endfor %}
+        {% include 'application/_form_fields.html' %}
 
         <button type="submit">{% if job %}Save Changes{% else %}Save Application{% endif %}</button>
     </form>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    document.querySelectorAll('.form-field input, .form-field select, .form-field textarea').forEach(function (field) {
-        field.addEventListener('input', clearFieldError);
-        field.addEventListener('change', clearFieldError);
-    });
-
-    function clearFieldError(event) {
-        var fieldWrapper = event.target.closest('.form-field');
-        var errorList = fieldWrapper.querySelector('.errorlist');
-
-        if (errorList) {
-            errorList.remove();
-        }
-
-        event.target.removeAttribute('aria-invalid');
-    }
-</script>
 {% endblock %}

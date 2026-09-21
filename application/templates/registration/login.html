@@ -4,20 +4,24 @@
 
 {% block content %}
 <div class="container auth-container">
-    <h1>Log In</h1>
+    <div class="auth-heading">
+        <p class="eyebrow">Welcome back</p>
+        <h1>Log in to your account</h1>
+        <p>Continue managing your applications, interviews, and follow-ups.</p>
+    </div>
 
     <form method="POST" class="form-card auth-card">
         {% csrf_token %}
         {% if next %}
             <input type="hidden" name="next" value="{{ next }}">
         {% endif %}
-        {{ form.as_p }}
+        {% include 'application/_form_fields.html' %}
 
         <button type="submit">Log In</button>
     </form>
 
     <p class="auth-switch">
-        New here?
+        New to Job Application Tracker?
         <a href="{% url 'register' %}">Create an account</a>
     </p>
 </div>
