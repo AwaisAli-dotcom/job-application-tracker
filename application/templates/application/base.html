@@ -10,36 +10,72 @@
     <link rel="stylesheet" href="{% static 'application/style.css' %}">
     <script src="{% static 'application/app.js' %}" defer></script>
 </head>
-<body>
+<body class="{% if user.is_authenticated %}authenticated-shell{% else %}public-shell{% endif %}">
 
 <a class="skip-link" href="#main-content">Skip to main content</a>
 
-<header class="site-header">
-    <div class="site-header-inner">
-        <a class="site-brand" href="{% if user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'home' %}{% endif %}">
-            Job Application Tracker
+{% if user.is_authenticated %}
+    <header class="app-topbar">
+        <div class="app-topbar-inner">
+            <button class="app-nav-toggle" type="button" aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation" data-nav-toggle>
+                <span aria-hidden="true">&#9776;</span>
+            </button>
+
+            <a class="mobile-brand" href="{% url 'dashboard' %}">Job Application Tracker</a>
+
+            <details class="account-menu">
+                <summary aria-label="Open account menu">
+                    <span class="account-avatar" aria-hidden="true">{{ user.username|slice:':1'|upper }}</span>
+                    <span class="account-name">{{ user.username }}</span>
+                    <span class="account-chevron" aria-hidden="true">&#9662;</span>
+                </summary>
+                <div class="account-popover">
+                    <a href="{% url 'profile' %}">Account</a>
+                    <form method="POST" action="{% url 'logout' %}" class="account-logout-form">
+                        {% csrf_token %}
+                        <button type="submit">Log out</button>
+                    </form>
+                </div>
+            </details>
+        </div>
+    </header>
+
+    <aside class="app-sidebar" id="app-sidebar" aria-label="Application navigation" data-app-sidebar>
+        <a class="sidebar-brand" href="{% url 'dashboard' %}">
+            <span class="brand-mark" aria-hidden="true">JT</span>
+            <span class="brand-copy">
+                <strong>Job Application</strong>
+                <span>Tracker</span>
+            </span>
         </a>
 
-        <nav class="site-nav" aria-label="Main navigation">
-            {% if user.is_authenticated %}
-                <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
-                <a href="{% url 'application_list' %}" {% if request.resolver_match.url_name == 'application_list' %}aria-current="page"{% endif %}>Applications</a>
-                <a href="{% url 'kanban_board' %}" {% if request.resolver_match.url_name == 'kanban_board' %}aria-current="page"{% endif %}>Kanban</a>
-                <a href="{% url 'interview_list' %}" {% if request.resolver_match.url_name == 'interview_list' %}aria-current="page"{% endif %}>Interviews</a>
-                <a href="{% url 'application_create' %}" {% if request.resolver_match.url_name == 'application_create' %}aria-current="page"{% endif %}>Add application</a>
-                <a href="{% url 'profile' %}" {% if request.resolver_match.url_name == 'profile' %}aria-current="page"{% endif %}>Account</a>
-                <form method="POST" action="{% url 'logout' %}" class="site-logout-form">
-                    {% csrf_token %}
-                    <button type="submit">Log out</button>
-                </form>
-            {% else %}
+        <a class="sidebar-primary-action" href="{% url 'application_create' %}" {% if request.resolver_match.url_name == 'application_create' %}aria-current="page"{% endif %}>
+            <span aria-hidden="true">+</span> Add Application
+        </a>
+
+        <nav class="sidebar-nav" aria-label="Main navigation">
+            <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+            <a href="{% url 'application_list' %}" {% if request.resolver_match.url_name == 'application_list' %}aria-current="page"{% endif %}>Applications</a>
+            <a href="{% url 'kanban_board' %}" {% if request.resolver_match.url_name == 'kanban_board' %}aria-current="page"{% endif %}>Kanban</a>
+            <a href="{% url 'interview_list' %}" {% if request.resolver_match.url_name == 'interview_list' %}aria-current="page"{% endif %}>Interviews</a>
+        </nav>
+    </aside>
+
+    <button class="nav-overlay" type="button" aria-label="Close navigation" data-nav-overlay hidden></button>
+    <div class="app-workspace">
+{% else %}
+    <header class="site-header">
+        <div class="site-header-inner">
+            <a class="site-brand" href="{% url 'home' %}">Job Application Tracker</a>
+
+            <nav class="site-nav" aria-label="Main navigation">
                 <a href="{% url 'home' %}">Home</a>
                 <a href="{% url 'login' %}">Log In</a>
                 <a href="{% url 'register' %}">Register</a>
-            {% endif %}
-        </nav>
-    </div>
-</header>
+            </nav>
+        </div>
+    </header>
+{% endif %}
 
 {% if messages %}
     <div class="container">
@@ -65,6 +101,10 @@
         </nav>
     </div>
 </footer>
+
+{% if user.is_authenticated %}
+    </div>
+{% endif %}
 
 {% block scripts %}{% endblock %}
 

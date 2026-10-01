@@ -4,41 +4,54 @@
 
 {% block content %}
 <div class="container dashboard-container">
-    <h1>Dashboard</h1>
+    <div class="page-heading dashboard-heading">
+        <div>
+            <p class="eyebrow">Job search overview</p>
+            <h1>Dashboard</h1>
+            <p>Your pipeline, recent progress, and upcoming activity.</p>
+        </div>
+    </div>
 
     {% if total_applications %}
-        <section class="dashboard-summary">
+        <section class="dashboard-primary-metrics" aria-label="Application summary">
             <div class="metric-card">
-                <span>Total</span>
+                <span>Total Applications</span>
                 <strong>{{ total_applications }}</strong>
             </div>
             <div class="metric-card">
-                <span>Submitted</span>
-                <strong>{{ submitted_count }}</strong>
+                <span>Active Applications</span>
+                <strong>{{ active_count }}</strong>
             </div>
             <div class="metric-card">
-                <span>Applied this month</span>
-                <strong>{{ applied_this_month }}</strong>
-            </div>
-            <div class="metric-card">
-                <span>Interviewing</span>
+                <span>Interviews</span>
                 <strong>{{ interviews_count }}</strong>
             </div>
             <div class="metric-card">
                 <span>Offers</span>
                 <strong>{{ offers_count }}</strong>
             </div>
-            <div class="metric-card">
+        </section>
+
+        <section class="dashboard-secondary-analytics" aria-label="Secondary analytics">
+            <div>
+                <span>Applied this month</span>
+                <strong>{{ applied_this_month }}</strong>
+            </div>
+            <div>
+                <span>Submitted</span>
+                <strong>{{ submitted_count }}</strong>
+            </div>
+            <div>
+                <span>Response rate</span>
+                <strong>{{ response_rate }}%</strong>
+            </div>
+            <div>
                 <span>Interview rate</span>
                 <strong>{{ interview_rate }}%</strong>
             </div>
-            <div class="metric-card">
+            <div>
                 <span>Offer rate</span>
                 <strong>{{ offer_rate }}%</strong>
-            </div>
-            <div class="metric-card">
-                <span>Response rate</span>
-                <strong>{{ response_rate }}%</strong>
             </div>
         </section>
 
@@ -97,54 +110,56 @@
             </div>
         </section>
 
-        <section class="dashboard-panel">
-            <h2>Upcoming Interviews</h2>
-            <div class="interview-list">
-                {% for interview in upcoming_interviews %}
-                    <div class="interview-item">
-                        <div>
-                            <strong>{{ interview.application.company }}</strong>
-                            <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
+        <section class="dashboard-activity-grid" aria-label="Upcoming activity">
+            <div class="dashboard-panel">
+                <h2>Upcoming Interviews</h2>
+                <div class="interview-list">
+                    {% for interview in upcoming_interviews %}
+                        <div class="interview-item">
+                            <div>
+                                <strong>{{ interview.application.company }}</strong>
+                                <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
+                            </div>
+                            <a class="view-link" href="{% url 'application_detail' interview.application.pk %}" aria-label="View {{ interview.application.company }} application">View</a>
                         </div>
-                        <a class="view-link" href="{% url 'application_detail' interview.application.pk %}" aria-label="View {{ interview.application.company }} application">View</a>
-                    </div>
-                {% empty %}
-                    <p>No upcoming interviews.</p>
-                {% endfor %}
+                    {% empty %}
+                        <p>No upcoming interviews.</p>
+                    {% endfor %}
+                </div>
             </div>
-        </section>
 
-        <section class="dashboard-panel">
-            <h2>Upcoming Reminders</h2>
-            <div class="interview-list">
-                {% for reminder in upcoming_reminders %}
-                    <div class="interview-item">
-                        <div>
-                            <strong>{{ reminder.title }}</strong>
-                            <span>{{ reminder.application.company }} - {{ reminder.due_at }}</span>
+            <div class="dashboard-panel">
+                <h2>Upcoming Reminders</h2>
+                <div class="interview-list">
+                    {% for reminder in upcoming_reminders %}
+                        <div class="interview-item">
+                            <div>
+                                <strong>{{ reminder.title }}</strong>
+                                <span>{{ reminder.application.company }} - {{ reminder.due_at }}</span>
+                            </div>
+                            <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}" aria-label="View {{ reminder.application.company }} application">View</a>
                         </div>
-                        <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}" aria-label="View {{ reminder.application.company }} application">View</a>
-                    </div>
-                {% empty %}
-                    <p>No upcoming reminders.</p>
-                {% endfor %}
+                    {% empty %}
+                        <p>No upcoming reminders.</p>
+                    {% endfor %}
+                </div>
             </div>
-        </section>
 
-        <section class="dashboard-panel">
-            <h2>Upcoming Deadlines</h2>
-            <div class="interview-list">
-                {% for job in upcoming_deadlines %}
-                    <div class="interview-item">
-                        <div>
-                            <strong>{{ job.company }}</strong>
-                            <span>{{ job.job_title }} - {{ job.deadline }}</span>
+            <div class="dashboard-panel">
+                <h2>Upcoming Deadlines</h2>
+                <div class="interview-list">
+                    {% for job in upcoming_deadlines %}
+                        <div class="interview-item">
+                            <div>
+                                <strong>{{ job.company }}</strong>
+                                <span>{{ job.job_title }} - {{ job.deadline }}</span>
+                            </div>
+                            <a class="view-link" href="{% url 'application_detail' job.pk %}" aria-label="View {{ job.company }} application">View</a>
                         </div>
-                        <a class="view-link" href="{% url 'application_detail' job.pk %}" aria-label="View {{ job.company }} application">View</a>
-                    </div>
-                {% empty %}
-                    <p>No upcoming deadlines.</p>
-                {% endfor %}
+                    {% empty %}
+                        <p>No upcoming deadlines.</p>
+                    {% endfor %}
+                </div>
             </div>
         </section>
     {% else %}

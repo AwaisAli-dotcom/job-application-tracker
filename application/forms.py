@@ -14,10 +14,12 @@ from .models import (
     JobApplication,
     Reminder,
     document_content_type,
+    validate_document_file,
 )
 
 
 User = get_user_model()
+DOCUMENT_FILE_ACCEPT = '.pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg'
 
 
 def validate_http_url(value, message):
@@ -194,6 +196,31 @@ class JobApplicationForm(forms.ModelForm):
         return cleaned_data
 
 
+class ApplicationAttachmentsForm(forms.Form):
+    cv_file = forms.FileField(
+        required=False,
+        label='CV',
+        validators=[validate_document_file],
+        widget=forms.FileInput(attrs={'accept': DOCUMENT_FILE_ACCEPT}),
+    )
+    cover_letter_file = forms.FileField(
+        required=False,
+        label='Cover letter',
+        validators=[validate_document_file],
+        widget=forms.FileInput(attrs={'accept': DOCUMENT_FILE_ACCEPT}),
+    )
+
+    def uploaded_files(self):
+        return [
+            (self.cleaned_data.get('cv_file'), 'cv', 'CV'),
+            (
+                self.cleaned_data.get('cover_letter_file'),
+                'cover_letter',
+                'Cover Letter',
+            ),
+        ]
+
+
 class InterviewForm(forms.ModelForm):
     class Meta:
         model = Interview
@@ -246,7 +273,7 @@ class ApplicationDocumentForm(forms.ModelForm):
         }
         widgets = {
             'file': forms.ClearableFileInput(
-                attrs={'accept': '.pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg'}
+                attrs={'accept': DOCUMENT_FILE_ACCEPT}
             ),
             'link': forms.TextInput(),
         }
@@ -270,11 +297,7 @@ class ApplicationDocumentForm(forms.ModelForm):
         uploaded_file = self.cleaned_data.get('file')
 
         if isinstance(uploaded_file, UploadedFile):
-            document.original_filename = get_valid_filename(
-                Path(uploaded_file.name).name
-            )[:255]
-            document.file_size = uploaded_file.size
-            document.content_type = document_content_type(uploaded_file.name)
+            set_document_upload_metadata(document, uploaded_file)
         elif not uploaded_file:
             document.original_filename = ''
             document.file_size = None
@@ -284,6 +307,37 @@ class ApplicationDocumentForm(forms.ModelForm):
             document.save()
 
         return document
+
+
+def set_document_upload_metadata(document, uploaded_file):
+    document.original_filename = get_valid_filename(
+        Path(uploaded_file.name).name
+    )[:255]
+    document.file_size = uploaded_file.size
+    document.content_type = document_content_type(uploaded_file.name)
+
+
+def create_uploaded_application_document(application, user, uploaded_file, document_type, label):
+    safe_filename = get_valid_filename(Path(uploaded_file.name).name)
+    filename_stem = Path(safe_filename).stem or label
+    document = ApplicationDocument(
+        user=user,
+        application=application,
+        title=f'{label} - {filename_stem}'[:150],
+        document_type=document_type,
+        file=uploaded_file,
+    )
+    set_document_upload_metadata(document, uploaded_file)
+
+    try:
+        document.full_clean()
+        document.save()
+    except Exception:
+        if document.file and document.file._committed:
+            document.file.storage.delete(document.file.name)
+        raise
+
+    return document
 
 
 class ReminderForm(forms.ModelForm):

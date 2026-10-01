@@ -19,14 +19,28 @@ from django.views.decorators.csrf import requires_csrf_token
 
 from .models import ApplicationDocument, Interview, JobApplication, Reminder, StatusHistory
 from .forms import (
+    ApplicationAttachmentsForm,
     ApplicationDocumentForm,
     InterviewForm,
     JobApplicationForm,
     ProfileForm,
     RegistrationForm,
     ReminderForm,
+    create_uploaded_application_document,
 )
 from .throttling import limit_registration_requests
+
+
+ADVANCED_APPLICATION_FIELDS = (
+    'employment_type',
+    'work_mode',
+    'source',
+    'recruiter_name',
+    'recruiter_email',
+    'deadline',
+    'salary_min',
+    'salary_max',
+)
 
 
 def home(request):
@@ -164,6 +178,48 @@ def record_status_change(job, old_status, new_status):
         old_status=old_status,
         new_status=new_status
     )
+
+
+def should_open_more_details(form, job=None):
+    if any(form[field_name].errors for field_name in ADVANCED_APPLICATION_FIELDS):
+        return True
+
+    if form.is_bound and any(
+        str(form.data.get(field_name, '')).strip()
+        for field_name in ADVANCED_APPLICATION_FIELDS
+    ):
+        return True
+
+    if form.is_bound and str(form.data.get('currency', '')).strip() not in ('', 'EUR'):
+        return True
+
+    return bool(job and (
+        any(
+            getattr(job, field_name) not in (None, '')
+            for field_name in ADVANCED_APPLICATION_FIELDS
+        )
+        or job.currency not in (None, '', 'EUR')
+    ))
+
+
+def save_application_attachments(attachment_form, job, user, saved_documents):
+    for uploaded_file, document_type, label in attachment_form.uploaded_files():
+        if uploaded_file:
+            saved_documents.append(
+                create_uploaded_application_document(
+                    job,
+                    user,
+                    uploaded_file,
+                    document_type,
+                    label,
+                )
+            )
+
+
+def delete_new_document_files(documents):
+    for document in documents:
+        if document.file:
+            document.file.storage.delete(document.file.name)
 
 
 @login_required
@@ -791,22 +847,44 @@ def update_application_status(request, pk):
 def application_create(request):
     if request.method == 'POST':
         form = JobApplicationForm(request.POST)
+        attachment_form = ApplicationAttachmentsForm(request.POST, request.FILES)
+        form_is_valid = form.is_valid()
+        attachments_are_valid = attachment_form.is_valid()
 
-        if form.is_valid():
-            job = form.save(commit=False)
-            job.user = request.user
-            job.save()
+        if form_is_valid and attachments_are_valid:
+            saved_documents = []
+
+            try:
+                with transaction.atomic():
+                    job = form.save(commit=False)
+                    job.user = request.user
+                    job.save()
+                    save_application_attachments(
+                        attachment_form,
+                        job,
+                        request.user,
+                        saved_documents,
+                    )
+            except Exception:
+                delete_new_document_files(saved_documents)
+                raise
+
             messages.success(request, 'Application added.')
 
             return redirect('application_list')
 
     else:
         form = JobApplicationForm()
+        attachment_form = ApplicationAttachmentsForm()
 
     return render(
         request,
         'application/application_form.html',
-        {'form': form}
+        {
+            'form': form,
+            'attachment_form': attachment_form,
+            'more_details_open': should_open_more_details(form),
+        }
     )
 
 
@@ -821,22 +899,45 @@ def application_update(request, pk):
     if request.method == 'POST':
         old_status = job.status
         form = JobApplicationForm(request.POST, instance=job)
+        attachment_form = ApplicationAttachmentsForm(request.POST, request.FILES)
+        form_is_valid = form.is_valid()
+        attachments_are_valid = attachment_form.is_valid()
 
-        if form.is_valid():
-            with transaction.atomic():
-                job = form.save()
-                record_status_change(job, old_status, job.status)
+        if form_is_valid and attachments_are_valid:
+            saved_documents = []
+
+            try:
+                with transaction.atomic():
+                    job = form.save()
+                    record_status_change(job, old_status, job.status)
+                    save_application_attachments(
+                        attachment_form,
+                        job,
+                        request.user,
+                        saved_documents,
+                    )
+            except Exception:
+                delete_new_document_files(saved_documents)
+                raise
+
             messages.success(request, 'Application updated.')
 
             return redirect('application_list')
 
     else:
         form = JobApplicationForm(instance=job)
+        attachment_form = ApplicationAttachmentsForm()
 
     return render(
         request,
         'application/application_form.html',
-        {'form': form, 'job': job}
+        {
+            'form': form,
+            'attachment_form': attachment_form,
+            'job': job,
+            'documents': job.documents.filter(user=request.user),
+            'more_details_open': should_open_more_details(form, job),
+        }
     )
 
 

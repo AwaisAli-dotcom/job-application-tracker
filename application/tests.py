@@ -12,7 +12,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone as django_timezone
 
-from .forms import JobApplicationForm
+from .forms import JobApplicationForm, create_uploaded_application_document
 from .models import (
     MAX_DOCUMENT_FILE_SIZE,
     ApplicationDocument,
@@ -871,7 +871,7 @@ class JobApplicationDetailTests(TestCase):
 
         response = self.client.get(reverse('application_update', args=[self.application.pk]))
 
-        self.assertContains(response, 'Edit Job Application')
+        self.assertContains(response, '<h1>Edit Application</h1>')
         self.assertContains(response, 'Save Changes')
 
     def test_legacy_salary_remains_visible_without_structured_values(self):
@@ -2259,6 +2259,328 @@ class JobApplicationPaginationTests(TestCase):
         self.assertIn(reverse('login'), response['Location'])
 
 
+class ApplicationEditorWorkflowTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='editoruser',
+            password='testpass123',
+        )
+        self.other_user = User.objects.create_user(
+            username='othereditoruser',
+            password='testpass123',
+        )
+        self.client.force_login(self.user)
+
+    def required_application_data(self, **overrides):
+        data = {
+            'company': 'Focused Company',
+            'job_title': 'Backend Developer',
+            'location': 'Vilnius',
+            'status': 'applied',
+            'application_date': django_timezone.localdate(),
+        }
+        data.update(overrides)
+        return data
+
+    def pdf_upload(self, name):
+        return SimpleUploadedFile(
+            name,
+            b'%PDF-1.4\n%%EOF',
+            content_type='application/pdf',
+        )
+
+    def test_authenticated_layout_uses_sidebar_and_account_menu(self):
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'class="app-sidebar"')
+        self.assertContains(response, 'class="sidebar-primary-action"')
+        self.assertContains(response, 'class="account-menu"')
+        self.assertContains(response, 'data-nav-toggle')
+        self.assertContains(response, reverse('application_list'))
+        self.assertContains(response, reverse('kanban_board'))
+        self.assertContains(response, reverse('interview_list'))
+
+    def test_add_application_accepts_only_required_fields(self):
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(),
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        application = JobApplication.objects.get(company='Focused Company')
+        self.assertEqual(application.user, self.user)
+        self.assertEqual(application.currency, 'EUR')
+        self.assertEqual(application.source, '')
+
+    def test_more_details_are_collapsed_for_add_and_save_advanced_fields(self):
+        response = self.client.get(reverse('application_create'))
+
+        self.assertContains(response, '<details class="more-details">')
+        self.assertNotContains(response, '<details class="more-details" open>')
+
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(
+                employment_type='full_time',
+                work_mode='hybrid',
+                source='Referral',
+                recruiter_name='Mila Recruiter',
+                recruiter_email='mila@example.com',
+                salary_min='3000',
+                salary_max='4000',
+                currency='EUR',
+                deadline=django_timezone.localdate() + timedelta(days=7),
+            ),
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        application = JobApplication.objects.get(company='Focused Company')
+        self.assertEqual(application.source, 'Referral')
+        self.assertEqual(application.recruiter_email, 'mila@example.com')
+        self.assertEqual(application.salary_min, 3000)
+
+    def test_invalid_advanced_field_reopens_more_details(self):
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(recruiter_email='not an email'),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<details class="more-details" open>')
+        self.assertContains(response, 'Enter a valid email address.')
+
+    def test_add_application_with_cv(self):
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(
+                company='CV Company',
+                cv_file=self.pdf_upload('candidate-cv.pdf'),
+            ),
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        application = JobApplication.objects.get(company='CV Company')
+        document = ApplicationDocument.objects.get(application=application)
+        self.assertEqual(document.user, self.user)
+        self.assertEqual(document.document_type, 'cv')
+        self.assertEqual(document.original_filename, 'candidate-cv.pdf')
+
+    def test_add_application_with_cover_letter(self):
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(
+                company='Cover Letter Company',
+                cover_letter_file=self.pdf_upload('cover-letter.pdf'),
+            ),
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        application = JobApplication.objects.get(company='Cover Letter Company')
+        document = ApplicationDocument.objects.get(application=application)
+        self.assertEqual(document.user, self.user)
+        self.assertEqual(document.document_type, 'cover_letter')
+        self.assertEqual(document.original_filename, 'cover-letter.pdf')
+
+    def test_add_application_with_both_documents(self):
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(
+                company='Two Documents Company',
+                cv_file=self.pdf_upload('candidate.pdf'),
+                cover_letter_file=self.pdf_upload('letter.pdf'),
+            ),
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        application = JobApplication.objects.get(company='Two Documents Company')
+        documents = application.documents.order_by('document_type')
+        self.assertEqual(documents.count(), 2)
+        self.assertEqual(
+            set(documents.values_list('document_type', flat=True)),
+            {'cv', 'cover_letter'},
+        )
+        self.assertFalse(documents.exclude(user=self.user).exists())
+
+    def test_invalid_inline_document_prevents_application_creation(self):
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(
+                company='Invalid Upload Company',
+                cv_file=SimpleUploadedFile(
+                    'program.exe',
+                    b'MZ executable content',
+                    content_type='application/octet-stream',
+                ),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            'Upload a PDF, Word, OpenDocument, RTF, text, PNG, or JPEG file.',
+        )
+        self.assertFalse(JobApplication.objects.filter(company='Invalid Upload Company').exists())
+        self.assertFalse(ApplicationDocument.objects.filter(user=self.user).exists())
+
+    def test_oversized_inline_document_prevents_application_creation(self):
+        oversized_file = SimpleUploadedFile(
+            'large.pdf',
+            b'%PDF-' + (b'x' * MAX_DOCUMENT_FILE_SIZE),
+            content_type='application/pdf',
+        )
+
+        response = self.client.post(
+            reverse('application_create'),
+            self.required_application_data(
+                company='Oversized Upload Company',
+                cover_letter_file=oversized_file,
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Document files must be 4 MB or smaller.')
+        self.assertFalse(JobApplication.objects.filter(company='Oversized Upload Company').exists())
+
+    def test_failed_second_upload_rolls_back_application_and_first_file(self):
+        created_documents = []
+
+        def create_then_fail(application, user, uploaded_file, document_type, label):
+            if created_documents:
+                raise RuntimeError('Simulated second upload failure')
+
+            document = create_uploaded_application_document(
+                application,
+                user,
+                uploaded_file,
+                document_type,
+                label,
+            )
+            created_documents.append(document)
+            return document
+
+        with patch(
+            'application.views.create_uploaded_application_document',
+            side_effect=create_then_fail,
+        ):
+            with self.assertLogs('django.request', level='ERROR'):
+                with self.assertRaisesMessage(RuntimeError, 'Simulated second upload failure'):
+                    self.client.post(
+                        reverse('application_create'),
+                        self.required_application_data(
+                            company='Rollback Company',
+                            cv_file=self.pdf_upload('rollback-cv.pdf'),
+                            cover_letter_file=self.pdf_upload('rollback-letter.pdf'),
+                        ),
+                    )
+
+        self.assertFalse(JobApplication.objects.filter(company='Rollback Company').exists())
+        self.assertFalse(ApplicationDocument.objects.filter(user=self.user).exists())
+        stored_file = created_documents[0].file
+        self.assertFalse(stored_file.storage.exists(stored_file.name))
+
+    def test_edit_preserves_advanced_fields_and_opens_more_details(self):
+        application = JobApplication.objects.create(
+            user=self.user,
+            company='Advanced Company',
+            job_title='Developer',
+            location='Kaunas',
+            status='saved',
+            application_date=django_timezone.localdate(),
+            employment_type='contract',
+            work_mode='remote',
+            source='LinkedIn',
+            recruiter_name='Alex Recruiter',
+            recruiter_email='alex@example.com',
+            salary_min=2500,
+            salary_max=3200,
+            currency='EUR',
+            deadline=django_timezone.localdate() + timedelta(days=5),
+        )
+
+        response = self.client.get(reverse('application_update', args=[application.pk]))
+
+        self.assertContains(response, '<details class="more-details" open>')
+        self.assertContains(response, 'value="LinkedIn"')
+
+        response = self.client.post(
+            reverse('application_update', args=[application.pk]),
+            self.required_application_data(
+                company='Advanced Company',
+                job_title='Senior Developer',
+                location='Kaunas',
+                status='saved',
+                employment_type='contract',
+                work_mode='remote',
+                source='LinkedIn',
+                recruiter_name='Alex Recruiter',
+                recruiter_email='alex@example.com',
+                salary_min='2500',
+                salary_max='3200',
+                currency='EUR',
+                deadline=django_timezone.localdate() + timedelta(days=5),
+            ),
+        )
+
+        self.assertRedirects(response, reverse('application_list'))
+        application.refresh_from_db()
+        self.assertEqual(application.job_title, 'Senior Developer')
+        self.assertEqual(application.source, 'LinkedIn')
+        self.assertEqual(application.salary_max, 3200)
+
+    def test_edit_opens_more_details_for_non_default_currency(self):
+        application = JobApplication.objects.create(
+            user=self.user,
+            company='Currency Company',
+            job_title='Developer',
+            location='Vilnius',
+            status='saved',
+            application_date=django_timezone.localdate(),
+            currency='USD',
+        )
+
+        response = self.client.get(reverse('application_update', args=[application.pk]))
+
+        self.assertContains(response, '<details class="more-details" open>')
+        self.assertContains(response, 'value="USD"')
+
+    def test_edit_lists_only_current_applications_documents(self):
+        application = JobApplication.objects.create(
+            user=self.user,
+            company='Documents Company',
+            job_title='Developer',
+            location='Vilnius',
+            status='saved',
+            application_date=django_timezone.localdate(),
+        )
+        visible_document = ApplicationDocument.objects.create(
+            user=self.user,
+            application=application,
+            title='Visible CV',
+            document_type='cv',
+            link='https://example.com/visible-cv',
+        )
+        other_application = JobApplication.objects.create(
+            user=self.other_user,
+            company='Other Company',
+            job_title='Other Role',
+            status='saved',
+        )
+        ApplicationDocument.objects.create(
+            user=self.other_user,
+            application=other_application,
+            title='Hidden CV',
+            document_type='cv',
+        )
+
+        response = self.client.get(reverse('application_update', args=[application.pk]))
+
+        self.assertContains(response, 'Visible CV')
+        self.assertContains(response, reverse('document_update', args=[visible_document.pk]))
+        self.assertContains(response, reverse('document_delete', args=[visible_document.pk]))
+        self.assertNotContains(response, 'Hidden CV')
+
+
 class JobApplicationFormValidationTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -2528,7 +2850,10 @@ class JobApplicationFormValidationTests(TestCase):
 
         response = self.client.get(reverse('application_create'))
 
-        self.assertContains(response, '<form method="POST" class="form-card">')
+        self.assertContains(
+            response,
+            '<form method="POST" enctype="multipart/form-data" class="form-card application-editor-form">',
+        )
         self.assertNotContains(response, 'novalidate')
         self.assertContains(response, 'name="company"')
         self.assertContains(response, 'required')

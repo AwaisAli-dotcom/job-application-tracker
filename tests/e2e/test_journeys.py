@@ -141,8 +141,13 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page).to_have_url(re.compile(r'/dashboard/$'))
         return username
 
-    def add_application(self, company):
+    def logout(self):
+        self.page.locator('summary[aria-label="Open account menu"]').click()
+        self.page.get_by_role('button', name='Log out').click()
+
+    def add_application(self, company, include_documents=False, include_more_details=False):
         self.page.goto('/add/')
+        expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
         self.page.locator('[name="company"]').fill(company)
         self.page.locator('[name="job_title"]').fill('Python Developer')
         self.page.locator('[name="location"]').fill('Vilnius')
@@ -150,6 +155,23 @@ class BrowserJourneys(unittest.TestCase):
             datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
         )
         self.page.locator('[name="status"]').select_option('saved')
+        if include_more_details:
+            self.page.get_by_text('More details', exact=True).click()
+            expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+            self.page.locator('[name="work_mode"]').select_option('remote')
+            self.page.locator('[name="source"]').fill('E2E referral')
+            self.page.locator('[name="recruiter_email"]').fill('recruiter@example.test')
+        if include_documents:
+            self.page.locator('[name="cv_file"]').set_input_files({
+                'name': 'inline-cv.pdf',
+                'mimeType': 'application/pdf',
+                'buffer': b'%PDF-1.4\nE2E CV\n%%EOF',
+            })
+            self.page.locator('[name="cover_letter_file"]').set_input_files({
+                'name': 'inline-cover-letter.pdf',
+                'mimeType': 'application/pdf',
+                'buffer': b'%PDF-1.4\nE2E cover letter\n%%EOF',
+            })
         self.page.get_by_role('button', name='Save Application').click()
         expect(self.page).to_have_url(re.compile(r'/applications/$'))
         card = self.page.locator('.job-card').filter(has_text=company)
@@ -209,7 +231,7 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Change Password').click()
         expect(self.page.get_by_role('heading', name='Password changed')).to_be_visible()
 
-        self.page.get_by_role('button', name='Log out').click()
+        self.logout()
         expect(self.page).to_have_url(re.compile(r'/accounts/login/$'))
         self.page.locator('[name="username"]').fill(updated_name)
         self.page.locator('[name="password"]').fill('WrongPass123!')
@@ -219,7 +241,7 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Log In').click()
         expect(self.page).to_have_url(re.compile(r'/dashboard/$'))
 
-        self.page.get_by_role('button', name='Log out').click()
+        self.logout()
         self.page.get_by_role('link', name='Forgot password?').click()
         self.page.locator('[name="email"]').fill(f'{username}@example.test')
         self.page.get_by_role('button', name='Send Reset Link').click()
@@ -253,6 +275,9 @@ class BrowserJourneys(unittest.TestCase):
 
     def test_application_workflow(self):
         self.register()
+        expect(self.page.locator('#app-sidebar')).to_be_visible()
+        expect(self.page.locator('[data-nav-toggle]')).to_be_hidden()
+        expect(self.page.locator('summary[aria-label="Open account menu"]')).to_be_visible()
         self.page.goto('/add/')
         self.page.locator('[name="company"]').fill('Validation preview')
         self.page.locator('[name="job_title"]').fill('Python Developer')
@@ -273,8 +298,18 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.locator(f'#{error_id}')).to_have_count(0)
 
         company = f'E2E Company {uuid4().hex[:6]}'
-        detail_path = self.add_application(company)
+        detail_path = self.add_application(
+            company,
+            include_documents=True,
+            include_more_details=True,
+        )
         self.page.get_by_role('link', name='Edit', exact=True).first.click()
+        expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+        expect(self.page.locator('[name="source"]')).to_have_value('E2E referral')
+        expect(self.page.get_by_text('CV - inline-cv', exact=True)).to_be_visible()
+        expect(self.page.get_by_text('Cover Letter - inline-cover-letter', exact=True)).to_be_visible()
+        ARTIFACTS.mkdir(exist_ok=True)
+        self.page.screenshot(path=str(ARTIFACTS / 'application-form-desktop.png'), full_page=True)
         self.page.locator('[name="job_title"]').fill('Senior Python Developer')
         self.page.get_by_role('button', name='Save Changes').click()
         expect(self.page.locator('.job-card').filter(has_text=company)).to_contain_text('Senior Python Developer')
@@ -294,6 +329,9 @@ class BrowserJourneys(unittest.TestCase):
         self.assertTrue(csv_download.value.suggested_filename.endswith('.csv'))
         self.page.goto('/dashboard/')
         expect(self.page.get_by_role('heading', name='Dashboard')).to_be_visible()
+        expect(self.page.locator('.dashboard-primary-metrics .metric-card')).to_have_count(4)
+        expect(self.page.locator('.dashboard-secondary-analytics')).to_contain_text('Response rate')
+        self.page.screenshot(path=str(ARTIFACTS / 'dashboard-desktop.png'), full_page=True)
         self.page.goto('/applications/kanban/')
         card = self.page.locator('.kanban-card').filter(has_text=company)
         card.locator('select[name="status"]').select_option('interview')
@@ -342,15 +380,16 @@ class BrowserJourneys(unittest.TestCase):
         with self.page.expect_download() as document_download:
             documents.get_by_role('link', name='Download E2E CV').click()
         self.assertEqual(document_download.value.suggested_filename, 'e2e-cv.txt')
-        documents.locator('a.edit-link').click()
+        documents.get_by_role('link', name='Edit E2E CV document').click()
         self.page.locator('[name="notes"]').fill('Updated E2E document')
         self.page.get_by_role('button', name='Save Document').click()
         expect(documents).to_contain_text('Updated E2E document')
-        documents.locator('a.delete-link').click()
+        documents.get_by_role('link', name='Delete E2E CV document').click()
         self.page.get_by_role('button', name='Yes, delete it').click()
-        expect(documents).to_contain_text('No documents recorded yet.')
+        expect(documents).not_to_contain_text('E2E CV')
+        expect(documents).to_contain_text('CV - inline-cv')
+        expect(documents).to_contain_text('Cover Letter - inline-cover-letter')
 
-        ARTIFACTS.mkdir(exist_ok=True)
         self.page.goto('/applications/')
         self.page.screenshot(path=str(ARTIFACTS / 'applications-desktop.png'), full_page=True)
         mobile = self.browser.new_context(
@@ -371,6 +410,28 @@ class BrowserJourneys(unittest.TestCase):
                 )
                 if path == '/applications/':
                     mobile_page.screenshot(path=str(ARTIFACTS / 'applications-mobile.png'), full_page=True)
+                if path == '/add/':
+                    mobile_page.screenshot(path=str(ARTIFACTS / 'application-form-mobile.png'), full_page=True)
+                if path == '/dashboard/':
+                    mobile_page.screenshot(path=str(ARTIFACTS / 'dashboard-mobile.png'), full_page=True)
+                    nav_toggle = mobile_page.locator('[data-nav-toggle]')
+                    sidebar = mobile_page.locator('#app-sidebar')
+                    expect(nav_toggle).to_have_attribute('aria-expanded', 'false')
+                    expect(nav_toggle).to_have_attribute('aria-label', 'Open navigation')
+                    expect(sidebar).to_have_attribute('inert', '')
+                    nav_toggle.click()
+                    expect(nav_toggle).to_have_attribute('aria-expanded', 'true')
+                    expect(nav_toggle).to_have_attribute('aria-label', 'Close navigation')
+                    expect(sidebar).not_to_have_attribute('inert', '')
+                    expect(sidebar).to_have_css('transform', 'matrix(1, 0, 0, 1, 0, 0)')
+                    add_application_link = sidebar.get_by_role('link', name='Add Application')
+                    expect(add_application_link).to_be_focused()
+                    expect(add_application_link).to_be_visible()
+                    mobile_page.screenshot(path=str(ARTIFACTS / 'dashboard-mobile-menu.png'), full_page=True)
+                    mobile_page.keyboard.press('Escape')
+                    expect(nav_toggle).to_have_attribute('aria-expanded', 'false')
+                    expect(sidebar).to_have_attribute('inert', '')
+                    expect(nav_toggle).to_be_focused()
         finally:
             mobile.close()
 
@@ -416,7 +477,7 @@ class BrowserJourneys(unittest.TestCase):
         document_edit_href = private_document.locator('a.edit-link').get_attribute('href')
         document_delete_href = private_document.locator('a.delete-link').get_attribute('href')
 
-        self.page.get_by_role('button', name='Log out').click()
+        self.logout()
         self.page.goto(detail_path)
         expect(self.page).to_have_url(re.compile(r'/accounts/login/'))
         self.register()

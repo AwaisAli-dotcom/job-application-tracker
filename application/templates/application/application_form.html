@@ -3,20 +3,118 @@
 {% block title %}{% if job %}Edit Application{% else %}Add Application{% endif %}{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1>{% if job %}Edit Job Application{% else %}Add Job Application{% endif %}</h1>
-    <a class="back-link" href="{% url 'application_list' %}">
-    Back to Applications
-</a>
+<div class="container application-editor-container">
+    <div class="page-heading application-editor-heading">
+        <div>
+            <a class="back-link" href="{% url 'application_list' %}">Back to Applications</a>
+            <h1>{% if job %}Edit Application{% else %}Add Application{% endif %}</h1>
+            <p>{% if job %}Update the essentials or attach another document.{% else %}Capture the role now. You can add more detail whenever you need it.{% endif %}</p>
+        </div>
+    </div>
 
-    <form method="POST" class="form-card">
+    <form method="POST" enctype="multipart/form-data" class="form-card application-editor-form">
         {% csrf_token %}
 
         <p class="required-note"><span class="required-marker">*</span> Required fields</p>
 
-        {% include 'application/_form_fields.html' %}
+        {% if form.non_field_errors %}
+            <div class="form-errors" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
 
-        <button type="submit">{% if job %}Save Changes{% else %}Save Application{% endif %}</button>
+        {% include 'application/_form_field.html' with field=form.company %}
+        {% include 'application/_form_field.html' with field=form.job_title %}
+        {% include 'application/_form_field.html' with field=form.location %}
+        {% include 'application/_form_field.html' with field=form.status %}
+        {% include 'application/_form_field.html' with field=form.application_date %}
+        {% include 'application/_form_field.html' with field=form.job_url %}
+
+        <section class="inline-upload-section" aria-labelledby="application-documents-heading">
+            <div class="section-heading-row">
+                <div>
+                    <h2 id="application-documents-heading">CV / Cover Letter</h2>
+                    <p>Attach either document or both. Each file can be up to 4 MB.</p>
+                </div>
+            </div>
+
+            {% if attachment_form.non_field_errors %}
+                <div class="form-errors" role="alert">{{ attachment_form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="document-upload-grid">
+                {% for field in attachment_form %}
+                    <div class="form-field upload-field" data-upload-zone>
+                        <label for="{{ field.id_for_label }}">{{ field.label }} <span class="optional-label">(optional)</span></label>
+                        <div class="upload-drop-area">
+                            {{ field }}
+                            <span class="upload-prompt">Drag and drop a file here or <strong>choose a file</strong></span>
+                            <span class="upload-filename" data-file-name>No file selected</span>
+                        </div>
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+            </div>
+            <p class="upload-help">PDF, Word, OpenDocument, RTF, text, PNG, or JPEG.</p>
+        </section>
+
+        {% include 'application/_form_field.html' with field=form.notes %}
+
+        <details class="more-details"{% if more_details_open %} open{% endif %}>
+            <summary>
+                <span>More details</span>
+                <span class="more-details-summary">Employment, work mode, salary, recruiter, and deadline</span>
+            </summary>
+            <div class="more-details-grid">
+                {% include 'application/_form_field.html' with field=form.employment_type %}
+                {% include 'application/_form_field.html' with field=form.work_mode %}
+                {% include 'application/_form_field.html' with field=form.source %}
+                {% include 'application/_form_field.html' with field=form.recruiter_name %}
+                {% include 'application/_form_field.html' with field=form.recruiter_email %}
+                {% include 'application/_form_field.html' with field=form.deadline %}
+                {% include 'application/_form_field.html' with field=form.salary_min %}
+                {% include 'application/_form_field.html' with field=form.salary_max %}
+                {% include 'application/_form_field.html' with field=form.currency %}
+            </div>
+        </details>
+
+        <div class="form-actions">
+            <button type="submit">{% if job %}Save Changes{% else %}Save Application{% endif %}</button>
+            <a class="secondary-button" href="{% url 'application_list' %}">Cancel</a>
+        </div>
     </form>
+
+    {% if job %}
+        <section class="application-documents-panel" aria-labelledby="existing-documents-heading">
+            <div class="section-heading-row">
+                <div>
+                    <h2 id="existing-documents-heading">Documents</h2>
+                    <p>Files and links already attached to this application.</p>
+                </div>
+                <a class="secondary-button" href="{% url 'document_create' job.pk %}">Add another document</a>
+            </div>
+
+            <div class="compact-document-list">
+                {% for document in documents %}
+                    <div class="compact-document-item">
+                        <div>
+                            <strong>{{ document.title }}</strong>
+                            <span>{{ document.get_document_type_display }}{% if document.file_size %} - {{ document.file_size|filesizeformat }}{% endif %}</span>
+                        </div>
+                        <div class="card-actions">
+                            {% if document.file %}
+                                <a class="view-link" href="{% url 'document_download' document.pk %}" aria-label="Download {{ document.title }}">Download</a>
+                            {% endif %}
+                            {% if document.link %}
+                                <a class="view-link" href="{{ document.link }}" target="_blank" rel="noopener noreferrer" aria-label="Open {{ document.title }} link">Open link</a>
+                            {% endif %}
+                            <a class="edit-link" href="{% url 'document_update' document.pk %}" aria-label="Edit {{ document.title }} document">Edit</a>
+                            <a class="delete-link" href="{% url 'document_delete' document.pk %}" aria-label="Delete {{ document.title }} document">Remove</a>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="compact-empty-state">No documents attached yet.</p>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
 </div>
 {% endblock %}
