@@ -1,6 +1,7 @@
 import csv
 from collections import Counter
 from datetime import date
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
@@ -12,8 +13,10 @@ from django.core.paginator import Paginator
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.db import transaction
 from django.db.models import Prefetch, Q
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.csrf import requires_csrf_token
 
@@ -41,6 +44,27 @@ ADVANCED_APPLICATION_FIELDS = (
     'salary_min',
     'salary_max',
 )
+
+
+def safe_return_url(request, fallback_url=None, parameter='return_to'):
+    fallback_url = fallback_url or reverse('application_list')
+    candidate = request.POST.get(parameter) or request.GET.get(parameter)
+
+    if not candidate or not candidate.startswith('/') or candidate.startswith('//'):
+        return fallback_url
+
+    if not url_has_allowed_host_and_scheme(
+        candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return fallback_url
+
+    return candidate
+
+
+def add_return_url(url, return_url):
+    return f'{url}?{urlencode({"return_to": return_url})}'
 
 
 def home(request):
@@ -440,11 +464,19 @@ def application_detail(request, pk):
         pk=pk,
         user=request.user
     )
+    return_url = safe_return_url(request)
 
     return render(
         request,
         'application/application_detail.html',
-        {'job': job}
+        {
+            'job': job,
+            'return_url': return_url,
+            'detail_return_url': add_return_url(
+                reverse('application_detail', args=[job.pk]),
+                return_url,
+            ),
+        }
     )
 
 
@@ -473,6 +505,8 @@ def interview_create(request, application_pk):
         pk=application_pk,
         user=request.user
     )
+    fallback_url = reverse('application_detail', args=[application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
         form = InterviewForm(request.POST)
@@ -484,7 +518,7 @@ def interview_create(request, application_pk):
             interview.save()
             messages.success(request, 'Interview added.')
 
-            return redirect('application_detail', pk=application.pk)
+            return redirect(return_url)
 
     else:
         form = InterviewForm()
@@ -495,6 +529,7 @@ def interview_create(request, application_pk):
         {
             'form': form,
             'application': application,
+            'return_url': return_url,
         }
     )
 
@@ -507,6 +542,8 @@ def interview_update(request, pk):
         user=request.user,
         application__user=request.user,
     )
+    fallback_url = reverse('application_detail', args=[interview.application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
         form = InterviewForm(request.POST, instance=interview)
@@ -515,7 +552,7 @@ def interview_update(request, pk):
             form.save()
             messages.success(request, 'Interview updated.')
 
-            return redirect('application_detail', pk=interview.application.pk)
+            return redirect(return_url)
 
     else:
         form = InterviewForm(instance=interview)
@@ -527,6 +564,7 @@ def interview_update(request, pk):
             'form': form,
             'application': interview.application,
             'interview': interview,
+            'return_url': return_url,
         }
     )
 
@@ -540,18 +578,22 @@ def interview_delete(request, pk):
         user=request.user,
         application__user=request.user,
     )
+    fallback_url = reverse('application_detail', args=[interview.application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
-        application_pk = interview.application.pk
         interview.delete()
         messages.success(request, 'Interview deleted.')
 
-        return redirect('application_detail', pk=application_pk)
+        return redirect(return_url)
 
     return render(
         request,
         'application/interview_confirm_delete.html',
-        {'interview': interview}
+        {
+            'interview': interview,
+            'return_url': return_url,
+        }
     )
 
 
@@ -562,6 +604,8 @@ def document_create(request, application_pk):
         pk=application_pk,
         user=request.user
     )
+    fallback_url = reverse('application_detail', args=[application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
         form = ApplicationDocumentForm(request.POST, request.FILES)
@@ -573,7 +617,7 @@ def document_create(request, application_pk):
             document.save()
             messages.success(request, 'Document added.')
 
-            return redirect('application_detail', pk=application.pk)
+            return redirect(return_url)
 
     else:
         form = ApplicationDocumentForm()
@@ -584,6 +628,7 @@ def document_create(request, application_pk):
         {
             'form': form,
             'application': application,
+            'return_url': return_url,
         }
     )
 
@@ -597,18 +642,22 @@ def document_delete(request, pk):
         user=request.user,
         application__user=request.user,
     )
+    fallback_url = reverse('application_detail', args=[document.application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
-        application_pk = document.application.pk
         document.delete()
         messages.success(request, 'Document deleted.')
 
-        return redirect('application_detail', pk=application_pk)
+        return redirect(return_url)
 
     return render(
         request,
         'application/document_confirm_delete.html',
-        {'document': document}
+        {
+            'document': document,
+            'return_url': return_url,
+        }
     )
 
 
@@ -620,6 +669,8 @@ def document_update(request, pk):
         user=request.user,
         application__user=request.user,
     )
+    fallback_url = reverse('application_detail', args=[document.application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
         form = ApplicationDocumentForm(request.POST, request.FILES, instance=document)
@@ -628,7 +679,7 @@ def document_update(request, pk):
             form.save()
             messages.success(request, 'Document updated.')
 
-            return redirect('application_detail', pk=document.application.pk)
+            return redirect(return_url)
 
     else:
         form = ApplicationDocumentForm(instance=document)
@@ -640,6 +691,7 @@ def document_update(request, pk):
             'form': form,
             'application': document.application,
             'document': document,
+            'return_url': return_url,
         }
     )
 
@@ -689,6 +741,8 @@ def reminder_create(request, application_pk):
         pk=application_pk,
         user=request.user
     )
+    fallback_url = reverse('application_detail', args=[application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
         form = ReminderForm(request.POST)
@@ -700,7 +754,7 @@ def reminder_create(request, application_pk):
             reminder.save()
             messages.success(request, 'Reminder added.')
 
-            return redirect('application_detail', pk=application.pk)
+            return redirect(return_url)
 
     else:
         form = ReminderForm()
@@ -711,6 +765,7 @@ def reminder_create(request, application_pk):
         {
             'form': form,
             'application': application,
+            'return_url': return_url,
         }
     )
 
@@ -723,6 +778,8 @@ def reminder_update(request, pk):
         user=request.user,
         application__user=request.user,
     )
+    fallback_url = reverse('application_detail', args=[reminder.application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
         form = ReminderForm(request.POST, instance=reminder)
@@ -731,7 +788,7 @@ def reminder_update(request, pk):
             form.save()
             messages.success(request, 'Reminder updated.')
 
-            return redirect('application_detail', pk=reminder.application.pk)
+            return redirect(return_url)
 
     else:
         form = ReminderForm(instance=reminder)
@@ -743,6 +800,7 @@ def reminder_update(request, pk):
             'form': form,
             'application': reminder.application,
             'reminder': reminder,
+            'return_url': return_url,
         }
     )
 
@@ -756,18 +814,22 @@ def reminder_delete(request, pk):
         user=request.user,
         application__user=request.user,
     )
+    fallback_url = reverse('application_detail', args=[reminder.application.pk])
+    return_url = safe_return_url(request, fallback_url)
 
     if request.method == 'POST':
-        application_pk = reminder.application.pk
         reminder.delete()
         messages.success(request, 'Reminder deleted.')
 
-        return redirect('application_detail', pk=application_pk)
+        return redirect(return_url)
 
     return render(
         request,
         'application/reminder_confirm_delete.html',
-        {'reminder': reminder}
+        {
+            'reminder': reminder,
+            'return_url': return_url,
+        }
     )
 
 
@@ -845,6 +907,8 @@ def update_application_status(request, pk):
 
 @login_required
 def application_create(request):
+    return_url = safe_return_url(request)
+
     if request.method == 'POST':
         form = JobApplicationForm(request.POST)
         attachment_form = ApplicationAttachmentsForm(request.POST, request.FILES)
@@ -871,7 +935,7 @@ def application_create(request):
 
             messages.success(request, 'Application added.')
 
-            return redirect('application_list')
+            return redirect(return_url)
 
     else:
         form = JobApplicationForm()
@@ -884,6 +948,7 @@ def application_create(request):
             'form': form,
             'attachment_form': attachment_form,
             'more_details_open': should_open_more_details(form),
+            'return_url': return_url,
         }
     )
 
@@ -895,6 +960,7 @@ def application_update(request, pk):
         pk=pk,
         user=request.user
     )
+    return_url = safe_return_url(request)
 
     if request.method == 'POST':
         old_status = job.status
@@ -922,7 +988,7 @@ def application_update(request, pk):
 
             messages.success(request, 'Application updated.')
 
-            return redirect('application_list')
+            return redirect(return_url)
 
     else:
         form = JobApplicationForm(instance=job)
@@ -937,6 +1003,11 @@ def application_update(request, pk):
             'job': job,
             'documents': job.documents.filter(user=request.user),
             'more_details_open': should_open_more_details(form, job),
+            'return_url': return_url,
+            'form_page_url': add_return_url(
+                reverse('application_update', args=[job.pk]),
+                return_url,
+            ),
         }
     )
 
@@ -949,14 +1020,24 @@ def application_delete(request, pk):
         pk=pk,
         user=request.user
     )
+    return_url = safe_return_url(request)
+    cancel_url = safe_return_url(
+        request,
+        fallback_url=return_url,
+        parameter='cancel_to',
+    )
 
     if request.method == 'POST':
         job.delete()
         messages.success(request, 'Application deleted.')
-        return redirect('application_list')
+        return redirect(return_url)
 
     return render(
         request,
         'application/application_confirm_delete.html',
-        {'job': job}
+        {
+            'job': job,
+            'return_url': return_url,
+            'cancel_url': cancel_url,
+        }
     )

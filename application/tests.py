@@ -1,5 +1,6 @@
 import re
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote, urlencode
 from unittest.mock import patch
 
 from django.conf import settings
@@ -521,6 +522,34 @@ class DashboardTests(TestCase):
         self.assertContains(response, 'Upcoming Deadlines')
         self.assertContains(response, 'Saved Company')
         self.assertNotContains(response, 'Hidden Dashboard Company')
+        self.assertContains(response, 'dashboard-upcoming-panel is-empty', count=2)
+        self.assertContains(response, 'No interviews scheduled.')
+        self.assertContains(response, 'No reminders due.')
+        self.assertNotContains(response, 'No deadlines approaching.')
+
+    def test_upcoming_dashboard_cards_expand_when_records_exist(self):
+        application = JobApplication.objects.get(
+            user=self.user,
+            company='Interview Company',
+        )
+        Interview.objects.create(
+            user=self.user,
+            application=application,
+            scheduled_at=django_timezone.now() + timedelta(days=2),
+        )
+        Reminder.objects.create(
+            user=self.user,
+            application=application,
+            title='Prepare examples',
+            due_at=django_timezone.now() + timedelta(days=1),
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertNotContains(response, 'dashboard-upcoming-panel is-empty')
+        self.assertContains(response, 'Prepare examples')
+        self.assertContains(response, 'Saved Company')
 
     def test_interview_rate_counts_interview_records(self):
         applied_application = JobApplication.objects.create(
@@ -910,6 +939,153 @@ class JobApplicationDetailTests(TestCase):
         response = self.client.get(reverse('application_detail', args=[99999]))
 
         self.assertEqual(response.status_code, 404)
+
+
+class ContextualNavigationTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username='navigationuser',
+            password='testpass123',
+        )
+        self.application = JobApplication.objects.create(
+            user=self.user,
+            company='Context Company',
+            job_title='Platform Developer',
+            location='Vilnius',
+            status='applied',
+            application_date=django_timezone.localdate(),
+        )
+        self.interview = Interview.objects.create(
+            user=self.user,
+            application=self.application,
+            scheduled_at=django_timezone.now() + timedelta(days=2),
+        )
+        self.document = ApplicationDocument.objects.create(
+            user=self.user,
+            application=self.application,
+            title='Context CV',
+            document_type='cv',
+            link='https://example.com/context-cv',
+        )
+        self.reminder = Reminder.objects.create(
+            user=self.user,
+            application=self.application,
+            title='Context reminder',
+            due_at=django_timezone.now() + timedelta(days=1),
+        )
+        self.client.force_login(self.user)
+
+    def with_return_to(self, url, return_url):
+        return f'{url}?{urlencode({"return_to": return_url})}'
+
+    def test_source_pages_link_to_detail_with_their_full_context(self):
+        application_list = (
+            f'{reverse("application_list")}?search=Context&status=applied'
+            '&sort=oldest&page=1'
+        )
+        sources = [
+            application_list,
+            reverse('kanban_board'),
+            reverse('dashboard'),
+        ]
+        detail_url = reverse('application_detail', args=[self.application.pk])
+
+        for source_url in sources:
+            with self.subTest(source_url=source_url):
+                source_response = self.client.get(source_url)
+                contextual_detail_url = (
+                    f'{detail_url}?return_to={quote(source_url, safe="/")}'
+                )
+
+                self.assertContains(source_response, contextual_detail_url)
+
+                detail_response = self.client.get(contextual_detail_url)
+                self.assertEqual(detail_response.context['return_url'], source_url)
+                self.assertContains(detail_response, '&larr; Back')
+
+    def test_direct_detail_uses_applications_as_safe_fallback(self):
+        response = self.client.get(
+            reverse('application_detail', args=[self.application.pk])
+        )
+
+        self.assertEqual(response.context['return_url'], reverse('application_list'))
+
+    def test_external_and_protocol_relative_return_urls_are_rejected(self):
+        detail_url = reverse('application_detail', args=[self.application.pk])
+
+        for unsafe_url in ('https://evil.example/phish', '//evil.example/phish'):
+            with self.subTest(unsafe_url=unsafe_url):
+                response = self.client.get(detail_url, {'return_to': unsafe_url})
+
+                self.assertEqual(response.context['return_url'], reverse('application_list'))
+                self.assertNotEqual(response.context['return_url'], unsafe_url)
+
+    def test_edit_cancel_and_save_return_to_contextual_detail(self):
+        applications_url = f'{reverse("application_list")}?search=Context&page=1'
+        detail_response = self.client.get(
+            reverse('application_detail', args=[self.application.pk]),
+            {'return_to': applications_url},
+        )
+        contextual_detail_url = detail_response.context['detail_return_url']
+        edit_url = self.with_return_to(
+            reverse('application_update', args=[self.application.pk]),
+            contextual_detail_url,
+        )
+
+        edit_response = self.client.get(edit_url)
+
+        self.assertEqual(edit_response.context['return_url'], contextual_detail_url)
+        self.assertContains(edit_response, f'href="{contextual_detail_url}">Cancel</a>')
+
+        response = self.client.post(
+            reverse('application_update', args=[self.application.pk]),
+            {
+                'company': self.application.company,
+                'job_title': 'Senior Platform Developer',
+                'location': self.application.location,
+                'status': self.application.status,
+                'application_date': self.application.application_date,
+                'return_to': contextual_detail_url,
+            },
+        )
+
+        self.assertRedirects(response, contextual_detail_url)
+
+    def test_related_forms_return_to_application_context(self):
+        detail_url = self.with_return_to(
+            reverse('application_detail', args=[self.application.pk]),
+            reverse('dashboard'),
+        )
+        related_urls = [
+            reverse('interview_create', args=[self.application.pk]),
+            reverse('interview_update', args=[self.interview.pk]),
+            reverse('interview_delete', args=[self.interview.pk]),
+            reverse('document_create', args=[self.application.pk]),
+            reverse('document_update', args=[self.document.pk]),
+            reverse('document_delete', args=[self.document.pk]),
+            reverse('reminder_create', args=[self.application.pk]),
+            reverse('reminder_update', args=[self.reminder.pk]),
+            reverse('reminder_delete', args=[self.reminder.pk]),
+        ]
+
+        for related_url in related_urls:
+            with self.subTest(related_url=related_url):
+                response = self.client.get(related_url, {'return_to': detail_url})
+
+                self.assertEqual(response.context['return_url'], detail_url)
+                self.assertContains(response, f'href="{detail_url}">')
+
+    def test_related_form_rejects_external_return_url(self):
+        response = self.client.get(
+            reverse('document_update', args=[self.document.pk]),
+            {'return_to': 'https://evil.example/phish'},
+        )
+
+        self.assertEqual(
+            response.context['return_url'],
+            reverse('application_detail', args=[self.application.pk]),
+        )
 
 
 class JobApplicationKanbanTests(TestCase):
@@ -2292,11 +2468,14 @@ class ApplicationEditorWorkflowTests(TestCase):
 
     def test_authenticated_layout_uses_sidebar_and_account_menu(self):
         response = self.client.get(reverse('dashboard'))
+        content = response.content.decode()
 
         self.assertContains(response, 'class="app-sidebar"')
         self.assertContains(response, 'class="sidebar-primary-action"')
         self.assertContains(response, 'class="account-menu"')
         self.assertContains(response, 'data-nav-toggle')
+        self.assertEqual(content.count('viewBox="0 0 24 24"'), 4)
+        self.assertEqual(content.count('aria-hidden="true" focusable="false"'), 4)
         self.assertContains(response, reverse('application_list'))
         self.assertContains(response, reverse('kanban_board'))
         self.assertContains(response, reverse('interview_list'))
@@ -2318,6 +2497,7 @@ class ApplicationEditorWorkflowTests(TestCase):
 
         self.assertContains(response, '<details class="more-details">')
         self.assertNotContains(response, '<details class="more-details" open>')
+        self.assertContains(response, 'Optional job details')
 
         response = self.client.post(
             reverse('application_create'),

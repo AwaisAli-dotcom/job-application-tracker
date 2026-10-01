@@ -5,18 +5,17 @@
 {% block content %}
 <div class="container">
     <h1>Delete Reminder</h1>
-    <a class="back-link" href="{% url 'application_detail' reminder.application.pk %}">
-        Back to Application
-    </a>
+    <a class="back-link" href="{{ return_url }}">&larr; Back</a>
 
     <div class="form-card delete-confirmation">
         <p>Are you sure you want to delete <strong>{{ reminder.title }}</strong>?</p>
         <p class="delete-warning">This cannot be undone.</p>
         <form method="POST">
             {% csrf_token %}
+            <input type="hidden" name="return_to" value="{{ return_url }}">
             <div class="delete-actions">
                 <button type="submit" class="danger-button">Yes, delete it</button>
-                <a class="edit-link" href="{% url 'application_detail' reminder.application.pk %}">Cancel</a>
+                <a class="edit-link" href="{{ return_url }}">Cancel</a>
             </div>
         </form>
     </div>

@@ -4,9 +4,7 @@
 
 {% block content %}
 <div class="container application-list-container">
-    <a class="back-link" href="{% url 'application_list' %}">
-        Back to Applications
-    </a>
+    <a class="back-link" href="{{ return_url }}">&larr; Back</a>
 
     <div class="job-card">
         <h1>{{ job.company }}</h1>
@@ -118,11 +116,11 @@
         </p>
 
         <div class="card-actions">
-            <a class="edit-link" href="{% url 'application_update' job.pk %}">Edit</a>
-            <a class="view-link" href="{% url 'interview_create' job.pk %}">Add Interview</a>
-            <a class="view-link" href="{% url 'document_create' job.pk %}">Add Document</a>
-            <a class="view-link" href="{% url 'reminder_create' job.pk %}">Add Reminder</a>
-            <a class="delete-link" href="{% url 'application_delete' job.pk %}">Delete</a>
+            <a class="edit-link" href="{% url 'application_update' job.pk %}?return_to={{ detail_return_url|urlencode }}">Edit</a>
+            <a class="view-link" href="{% url 'interview_create' job.pk %}?return_to={{ detail_return_url|urlencode }}">Add Interview</a>
+            <a class="view-link" href="{% url 'document_create' job.pk %}?return_to={{ detail_return_url|urlencode }}">Add Document</a>
+            <a class="view-link" href="{% url 'reminder_create' job.pk %}?return_to={{ detail_return_url|urlencode }}">Add Reminder</a>
+            <a class="delete-link" href="{% url 'application_delete' job.pk %}?return_to={{ return_url|urlencode }}&amp;cancel_to={{ detail_return_url|urlencode }}">Delete</a>
         </div>
     </div>
 
@@ -148,8 +146,8 @@
                 {% endif %}
             </p>
             <div class="card-actions">
-                <a class="edit-link" href="{% url 'interview_update' interview.pk %}" aria-label="Edit {{ interview.get_interview_type_display }} interview at {{ job.company }}">Edit</a>
-                <a class="delete-link" href="{% url 'interview_delete' interview.pk %}" aria-label="Delete {{ interview.get_interview_type_display }} interview at {{ job.company }}">Delete</a>
+                <a class="edit-link" href="{% url 'interview_update' interview.pk %}?return_to={{ detail_return_url|urlencode }}" aria-label="Edit {{ interview.get_interview_type_display }} interview at {{ job.company }}">Edit</a>
+                <a class="delete-link" href="{% url 'interview_delete' interview.pk %}?return_to={{ detail_return_url|urlencode }}" aria-label="Delete {{ interview.get_interview_type_display }} interview at {{ job.company }}">Delete</a>
             </div>
         {% empty %}
             <p>No interviews recorded yet.</p>
@@ -177,8 +175,8 @@
                 {% if document.file %}
                     <a class="view-link" href="{% url 'document_download' document.pk %}" aria-label="Download {{ document.title }}">Download</a>
                 {% endif %}
-                <a class="edit-link" href="{% url 'document_update' document.pk %}" aria-label="Edit {{ document.title }} document">Edit</a>
-                <a class="delete-link" href="{% url 'document_delete' document.pk %}" aria-label="Delete {{ document.title }} document">Delete</a>
+                <a class="edit-link" href="{% url 'document_update' document.pk %}?return_to={{ detail_return_url|urlencode }}" aria-label="Edit {{ document.title }} document">Edit</a>
+                <a class="delete-link" href="{% url 'document_delete' document.pk %}?return_to={{ detail_return_url|urlencode }}" aria-label="Delete {{ document.title }} document">Delete</a>
             </div>
         {% empty %}
             <p>No documents recorded yet.</p>
@@ -200,8 +198,8 @@
                 {% endif %}
             </p>
             <div class="card-actions">
-                <a class="edit-link" href="{% url 'reminder_update' reminder.pk %}" aria-label="Edit {{ reminder.title }} reminder">Edit</a>
-                <a class="delete-link" href="{% url 'reminder_delete' reminder.pk %}" aria-label="Delete {{ reminder.title }} reminder">Delete</a>
+                <a class="edit-link" href="{% url 'reminder_update' reminder.pk %}?return_to={{ detail_return_url|urlencode }}" aria-label="Edit {{ reminder.title }} reminder">Edit</a>
+                <a class="delete-link" href="{% url 'reminder_delete' reminder.pk %}?return_to={{ detail_return_url|urlencode }}" aria-label="Delete {{ reminder.title }} reminder">Delete</a>
             </div>
         {% empty %}
             <p>No reminders recorded yet.</p>

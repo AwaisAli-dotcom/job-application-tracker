@@ -5,12 +5,11 @@
 {% block content %}
 <div class="container">
     <h1>{% if reminder %}Edit Reminder{% else %}Add Reminder{% endif %}</h1>
-    <a class="back-link" href="{% url 'application_detail' application.pk %}">
-        Back to Application
-    </a>
+    <a class="back-link" href="{{ return_url }}">&larr; Back</a>
 
     <form method="POST" class="form-card">
         {% csrf_token %}
+        <input type="hidden" name="return_to" value="{{ return_url }}">
         <p class="required-note"><span class="required-marker">*</span> Required fields</p>
         {% include 'application/_form_fields.html' %}
         <button type="submit">Save Reminder</button>

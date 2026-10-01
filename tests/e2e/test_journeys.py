@@ -303,6 +303,23 @@ class BrowserJourneys(unittest.TestCase):
             include_documents=True,
             include_more_details=True,
         )
+
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(re.compile(r'/applications/$'))
+        self.page.locator('[name="search"]').fill(company)
+        self.page.get_by_role('button', name='Search').click()
+        expect(self.page.locator('.job-card')).to_have_count(1)
+        filtered_list_url = self.page.url
+        self.page.locator('.job-card').filter(has_text=company).get_by_role(
+            'link', name=f'View {company} application for Python Developer'
+        ).click()
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(filtered_list_url)
+        self.page.locator('.job-card').filter(has_text=company).get_by_role(
+            'link', name=f'View {company} application for Python Developer'
+        ).click()
+        filtered_return_path = self.page.locator('a.back-link').get_attribute('href')
+
         self.page.get_by_role('link', name='Edit', exact=True).first.click()
         expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
         expect(self.page.locator('[name="source"]')).to_have_value('E2E referral')
@@ -310,13 +327,21 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.get_by_text('Cover Letter - inline-cover-letter', exact=True)).to_be_visible()
         ARTIFACTS.mkdir(exist_ok=True)
         self.page.screenshot(path=str(ARTIFACTS / 'application-form-desktop.png'), full_page=True)
+        self.page.get_by_role('link', name='Cancel').click()
+        expect(self.page).to_have_url(
+            re.compile(rf'{re.escape(detail_path)}\?return_to=')
+        )
+        expect(self.page.locator('a.back-link')).to_have_attribute('href', filtered_return_path)
+        self.page.get_by_role('link', name='Edit', exact=True).first.click()
         self.page.locator('[name="job_title"]').fill('Senior Python Developer')
         self.page.get_by_role('button', name='Save Changes').click()
+        expect(self.page).to_have_url(
+            re.compile(rf'{re.escape(detail_path)}\?return_to=')
+        )
+        expect(self.page.locator('a.back-link')).to_have_attribute('href', filtered_return_path)
         expect(self.page.locator('.job-card').filter(has_text=company)).to_contain_text('Senior Python Developer')
-
-        self.page.locator('[name="search"]').fill(company)
-        self.page.get_by_role('button', name='Search').click()
-        expect(self.page.locator('.job-card')).to_have_count(1)
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(filtered_list_url)
         self.page.locator('[name="status"]').select_option('saved')
         expect(self.page.locator('[name="search"]')).to_have_value(company)
         self.page.locator('[name="sort"]').select_option('company_az')
@@ -331,13 +356,31 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.get_by_role('heading', name='Dashboard')).to_be_visible()
         expect(self.page.locator('.dashboard-primary-metrics .metric-card')).to_have_count(4)
         expect(self.page.locator('.dashboard-secondary-analytics')).to_contain_text('Response rate')
+        self.page.locator('.recent-list a').filter(has_text=company).click()
+        expect(self.page.get_by_role('heading', name=company)).to_be_visible()
+        expect(self.page.locator('a.back-link')).to_have_attribute('href', '/dashboard/')
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(re.compile(r'/dashboard/$'))
         self.page.screenshot(path=str(ARTIFACTS / 'dashboard-desktop.png'), full_page=True)
         self.page.goto('/applications/kanban/')
         card = self.page.locator('.kanban-card').filter(has_text=company)
         card.locator('select[name="status"]').select_option('interview')
         expect(card.locator('.status-badge')).to_have_text('Interview')
+        card.get_by_role(
+            'link', name=f'View {company} application for Senior Python Developer'
+        ).click()
+        expect(self.page.locator('a.back-link')).to_have_attribute('href', '/applications/kanban/')
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(re.compile(r'/applications/kanban/$'))
 
+        self.page.goto(f'{detail_path}?return_to=https://evil.example/phish')
+        expect(self.page.locator('a.back-link')).to_have_attribute('href', '/applications/')
         self.page.goto(detail_path)
+        self.page.get_by_role('link', name='Add Interview').click()
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(
+            re.compile(rf'{re.escape(detail_path)}(?:\?.*)?$')
+        )
         self.page.get_by_role('link', name='Add Interview').click()
         self.page.locator('[name="scheduled_at"]').fill(
             (datetime.now(ZoneInfo('Europe/Vilnius')) + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M')
@@ -354,6 +397,11 @@ class BrowserJourneys(unittest.TestCase):
         expect(interviews).to_contain_text('No interviews recorded yet.')
 
         self.page.get_by_role('link', name='Add Reminder').click()
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(
+            re.compile(rf'{re.escape(detail_path)}(?:\?.*)?$')
+        )
+        self.page.get_by_role('link', name='Add Reminder').click()
         self.page.locator('[name="title"]').fill('E2E follow-up')
         self.page.locator('[name="due_at"]').fill(
             (datetime.now(ZoneInfo('Europe/Vilnius')) + timedelta(days=3)).strftime('%Y-%m-%dT%H:%M')
@@ -369,6 +417,11 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Yes, delete it').click()
         expect(reminders).to_contain_text('No reminders recorded yet.')
 
+        self.page.get_by_role('link', name='Add Document').click()
+        self.page.locator('a.back-link').click()
+        expect(self.page).to_have_url(
+            re.compile(rf'{re.escape(detail_path)}(?:\?.*)?$')
+        )
         self.page.get_by_role('link', name='Add Document').click()
         self.page.locator('[name="title"]').fill('E2E CV')
         self.page.locator('[name="file"]').set_input_files({

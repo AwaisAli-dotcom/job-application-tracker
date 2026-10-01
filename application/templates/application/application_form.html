@@ -6,7 +6,7 @@
 <div class="container application-editor-container">
     <div class="page-heading application-editor-heading">
         <div>
-            <a class="back-link" href="{% url 'application_list' %}">Back to Applications</a>
+            <a class="back-link" href="{{ return_url }}">&larr; Back</a>
             <h1>{% if job %}Edit Application{% else %}Add Application{% endif %}</h1>
             <p>{% if job %}Update the essentials or attach another document.{% else %}Capture the role now. You can add more detail whenever you need it.{% endif %}</p>
         </div>
@@ -14,6 +14,7 @@
 
     <form method="POST" enctype="multipart/form-data" class="form-card application-editor-form">
         {% csrf_token %}
+        <input type="hidden" name="return_to" value="{{ return_url }}">
 
         <p class="required-note"><span class="required-marker">*</span> Required fields</p>
 
@@ -61,7 +62,7 @@
         <details class="more-details"{% if more_details_open %} open{% endif %}>
             <summary>
                 <span>More details</span>
-                <span class="more-details-summary">Employment, work mode, salary, recruiter, and deadline</span>
+                <span class="more-details-summary">Optional job details</span>
             </summary>
             <div class="more-details-grid">
                 {% include 'application/_form_field.html' with field=form.employment_type %}
@@ -78,7 +79,7 @@
 
         <div class="form-actions">
             <button type="submit">{% if job %}Save Changes{% else %}Save Application{% endif %}</button>
-            <a class="secondary-button" href="{% url 'application_list' %}">Cancel</a>
+            <a class="secondary-button" href="{{ return_url }}">Cancel</a>
         </div>
     </form>
 
@@ -89,7 +90,7 @@
                     <h2 id="existing-documents-heading">Documents</h2>
                     <p>Files and links already attached to this application.</p>
                 </div>
-                <a class="secondary-button" href="{% url 'document_create' job.pk %}">Add another document</a>
+                <a class="secondary-button" href="{% url 'document_create' job.pk %}?return_to={{ form_page_url|urlencode }}">Add another document</a>
             </div>
 
             <div class="compact-document-list">
@@ -106,8 +107,8 @@
                             {% if document.link %}
                                 <a class="view-link" href="{{ document.link }}" target="_blank" rel="noopener noreferrer" aria-label="Open {{ document.title }} link">Open link</a>
                             {% endif %}
-                            <a class="edit-link" href="{% url 'document_update' document.pk %}" aria-label="Edit {{ document.title }} document">Edit</a>
-                            <a class="delete-link" href="{% url 'document_delete' document.pk %}" aria-label="Delete {{ document.title }} document">Remove</a>
+                            <a class="edit-link" href="{% url 'document_update' document.pk %}?return_to={{ form_page_url|urlencode }}" aria-label="Edit {{ document.title }} document">Edit</a>
+                            <a class="delete-link" href="{% url 'document_delete' document.pk %}?return_to={{ form_page_url|urlencode }}" aria-label="Delete {{ document.title }} document">Remove</a>
                         </div>
                     </div>
                 {% empty %}

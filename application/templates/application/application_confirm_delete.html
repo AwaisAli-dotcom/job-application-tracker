@@ -6,9 +6,7 @@
 <div class="container">
     <h1>Delete Job Application</h1>
 
-    <a class="back-link" href="{% url 'application_list' %}">
-        Back to Applications
-    </a>
+    <a class="back-link" href="{{ cancel_url }}">&larr; Back</a>
 
     <div class="form-card delete-confirmation">
         <p>
@@ -22,9 +20,11 @@
 
         <form method="POST">
             {% csrf_token %}
+            <input type="hidden" name="return_to" value="{{ return_url }}">
+            <input type="hidden" name="cancel_to" value="{{ cancel_url }}">
             <div class="delete-actions">
                 <button type="submit" class="danger-button">Yes, delete it</button>
-                <a class="edit-link" href="{% url 'application_list' %}">Cancel</a>
+                <a class="edit-link" href="{{ cancel_url }}">Cancel</a>
             </div>
         </form>
     </div>

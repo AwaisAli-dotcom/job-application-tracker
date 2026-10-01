@@ -1932,7 +1932,7 @@ h3 {
     display: flex;
     width: var(--sidebar-width);
     flex-direction: column;
-    gap: 20px;
+    gap: 18px;
     padding: 18px 14px;
     background: #ffffff;
     border-right: 1px solid var(--color-border);
@@ -1943,9 +1943,10 @@ h3 {
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 10px;
-    padding: 2px 4px 12px;
+    gap: 11px;
+    padding: 1px 4px 14px;
     color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
     text-decoration: none;
 }
 
@@ -1966,9 +1967,10 @@ h3 {
 .brand-copy {
     display: grid;
     min-width: 0;
+    gap: 1px;
     color: var(--color-muted);
     font-size: 12px;
-    line-height: 1.25;
+    line-height: 1.2;
 }
 
 .brand-copy strong {
@@ -2009,12 +2011,26 @@ h3 {
 }
 
 .sidebar-nav a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     padding: 9px 11px;
     color: var(--color-muted);
     border-radius: 6px;
     font-size: 14px;
     font-weight: 650;
     text-decoration: none;
+}
+
+.sidebar-nav svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .sidebar-nav a:hover,
@@ -2178,11 +2194,12 @@ h3 {
 }
 
 .dashboard-primary-metrics .metric-card {
-    padding: 16px;
+    padding: 13px 16px;
 }
 
 .dashboard-primary-metrics .metric-card strong {
-    font-size: 28px;
+    margin-top: 4px;
+    font-size: 26px;
 }
 
 .dashboard-secondary-analytics {
@@ -2226,6 +2243,7 @@ h3 {
 .dashboard-activity-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
     gap: 14px;
 }
 
@@ -2236,6 +2254,20 @@ h3 {
 .dashboard-activity-grid .interview-item {
     align-items: flex-start;
     flex-direction: column;
+}
+
+.dashboard-upcoming-panel.is-empty {
+    padding: 14px 16px;
+}
+
+.dashboard-upcoming-panel.is-empty h2 {
+    margin-bottom: 8px;
+}
+
+.dashboard-empty-message {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 13px;
 }
 
 /* Simplified application editor */

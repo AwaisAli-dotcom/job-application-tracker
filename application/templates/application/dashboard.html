@@ -92,7 +92,7 @@
                 <h2>Recent Activity</h2>
                 <div class="recent-list">
                     {% for job in recent_applications %}
-                        <a href="{% url 'application_detail' job.pk %}">
+                        <a href="{% url 'application_detail' job.pk %}?return_to={{ request.get_full_path|urlencode }}">
                             <span>{{ job.company }}</span>
                             <strong>{{ job.get_status_display }}</strong>
                         </a>
@@ -111,7 +111,7 @@
         </section>
 
         <section class="dashboard-activity-grid" aria-label="Upcoming activity">
-            <div class="dashboard-panel">
+            <div class="dashboard-panel dashboard-upcoming-panel{% if not upcoming_interviews %} is-empty{% endif %}">
                 <h2>Upcoming Interviews</h2>
                 <div class="interview-list">
                     {% for interview in upcoming_interviews %}
@@ -120,15 +120,15 @@
                                 <strong>{{ interview.application.company }}</strong>
                                 <span>{{ interview.get_interview_type_display }} - {{ interview.scheduled_at }}</span>
                             </div>
-                            <a class="view-link" href="{% url 'application_detail' interview.application.pk %}" aria-label="View {{ interview.application.company }} application">View</a>
+                            <a class="view-link" href="{% url 'application_detail' interview.application.pk %}?return_to={{ request.get_full_path|urlencode }}" aria-label="View {{ interview.application.company }} application">View</a>
                         </div>
                     {% empty %}
-                        <p>No upcoming interviews.</p>
+                        <p class="dashboard-empty-message">No interviews scheduled.</p>
                     {% endfor %}
                 </div>
             </div>
 
-            <div class="dashboard-panel">
+            <div class="dashboard-panel dashboard-upcoming-panel{% if not upcoming_reminders %} is-empty{% endif %}">
                 <h2>Upcoming Reminders</h2>
                 <div class="interview-list">
                     {% for reminder in upcoming_reminders %}
@@ -137,15 +137,15 @@
                                 <strong>{{ reminder.title }}</strong>
                                 <span>{{ reminder.application.company }} - {{ reminder.due_at }}</span>
                             </div>
-                            <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}" aria-label="View {{ reminder.application.company }} application">View</a>
+                            <a class="view-link" href="{% url 'application_detail' reminder.application.pk %}?return_to={{ request.get_full_path|urlencode }}" aria-label="View {{ reminder.application.company }} application">View</a>
                         </div>
                     {% empty %}
-                        <p>No upcoming reminders.</p>
+                        <p class="dashboard-empty-message">No reminders due.</p>
                     {% endfor %}
                 </div>
             </div>
 
-            <div class="dashboard-panel">
+            <div class="dashboard-panel dashboard-upcoming-panel{% if not upcoming_deadlines %} is-empty{% endif %}">
                 <h2>Upcoming Deadlines</h2>
                 <div class="interview-list">
                     {% for job in upcoming_deadlines %}
@@ -154,10 +154,10 @@
                                 <strong>{{ job.company }}</strong>
                                 <span>{{ job.job_title }} - {{ job.deadline }}</span>
                             </div>
-                            <a class="view-link" href="{% url 'application_detail' job.pk %}" aria-label="View {{ job.company }} application">View</a>
+                            <a class="view-link" href="{% url 'application_detail' job.pk %}?return_to={{ request.get_full_path|urlencode }}" aria-label="View {{ job.company }} application">View</a>
                         </div>
                     {% empty %}
-                        <p>No upcoming deadlines.</p>
+                        <p class="dashboard-empty-message">No deadlines approaching.</p>
                     {% endfor %}
                 </div>
             </div>

@@ -54,10 +54,22 @@
         </a>
 
         <nav class="sidebar-nav" aria-label="Main navigation">
-            <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
-            <a href="{% url 'application_list' %}" {% if request.resolver_match.url_name == 'application_list' %}aria-current="page"{% endif %}>Applications</a>
-            <a href="{% url 'kanban_board' %}" {% if request.resolver_match.url_name == 'kanban_board' %}aria-current="page"{% endif %}>Kanban</a>
-            <a href="{% url 'interview_list' %}" {% if request.resolver_match.url_name == 'interview_list' %}aria-current="page"{% endif %}>Interviews</a>
+            <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>
+                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+                <span>Dashboard</span>
+            </a>
+            <a href="{% url 'application_list' %}" {% if request.resolver_match.url_name == 'application_list' %}aria-current="page"{% endif %}>
+                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"></path><path d="M15 3v5h5"></path><path d="M10 13h6M10 17h6"></path></svg>
+                <span>Applications</span>
+            </a>
+            <a href="{% url 'kanban_board' %}" {% if request.resolver_match.url_name == 'kanban_board' %}aria-current="page"{% endif %}>
+                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="10" rx="1"></rect><rect x="17" y="4" width="4" height="13" rx="1"></rect></svg>
+                <span>Kanban</span>
+            </a>
+            <a href="{% url 'interview_list' %}" {% if request.resolver_match.url_name == 'interview_list' %}aria-current="page"{% endif %}>
+                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18M8 14h3M13 14h3M8 18h3"></path></svg>
+                <span>Interviews</span>
+            </a>
         </nav>
     </aside>
 
