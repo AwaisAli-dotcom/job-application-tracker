@@ -124,7 +124,7 @@ class JobApplicationForm(forms.ModelForm):
         self.fields['location'].required = True
         self.fields['application_date'].required = True
         self.fields['currency'].required = False
-        self.fields['currency'].initial = 'EUR'
+        self.fields['currency'].initial = ''
 
     def clean_company(self):
         company = self.cleaned_data.get('company', '').strip()
@@ -167,7 +167,7 @@ class JobApplicationForm(forms.ModelForm):
     def clean_currency(self):
         currency = self.cleaned_data.get('currency', '').strip().upper()
 
-        return currency or 'EUR'
+        return currency
 
     def clean_recruiter_name(self):
         return self.cleaned_data.get('recruiter_name', '').strip()

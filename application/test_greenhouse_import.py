@@ -88,10 +88,10 @@ class GreenhouseAdapterTests(SimpleTestCase):
 
     def test_salary_cents_are_converted_to_currency_units(self):
         payload = job_payload()
-        payload['pay_input_ranges'] = [{'min_cents': 9500000, 'max_cents': 12000000, 'currency_type': 'USD'}]
+        payload['pay_input_ranges'] = [{'min_cents': 14000000, 'max_cents': 15000000, 'currency_type': 'USD'}]
         result = self.import_payload(payload)
-        self.assertEqual(result['data']['salary_min'], '95000.00')
-        self.assertEqual(result['data']['salary_max'], '120000.00')
+        self.assertEqual(result['data']['salary_min'], '140000.00')
+        self.assertEqual(result['data']['salary_max'], '150000.00')
         self.assertEqual(result['data']['currency'], 'USD')
         self.assertIn('pay period', ' '.join(result['warnings']))
 
@@ -133,6 +133,129 @@ class GreenhouseAdapterTests(SimpleTestCase):
         self.assertNotIn('salary_min', result['data'])
         self.assertNotIn('currency', result['data'])
         self.assertIn('multiple salary ranges', ' '.join(result['warnings']))
+
+    def test_drivewealth_explicit_location_mode_and_labelled_pay_range(self):
+        payload = job_payload()
+        payload['content'] = (Path(settings.BASE_DIR) / 'tests/fixtures/greenhouse_job_content.html').read_text(encoding='utf-8')
+        data = self.import_payload(payload)['data']
+        self.assertEqual(data['location'], 'New York, NY')
+        self.assertEqual(data['work_mode'], 'hybrid')
+        self.assertEqual(data['salary_min'], '140000.00')
+        self.assertEqual(data['salary_max'], '150000.00')
+        self.assertEqual(data['currency'], 'USD')
+
+    def test_currency_absent_stays_absent_even_when_salary_is_available(self):
+        payload = job_payload()
+        payload['pay_input_ranges'] = [{'min_cents': 14000000, 'max_cents': 15000000}]
+        data = self.import_payload(payload)['data']
+        self.assertEqual(data['salary_min'], '140000.00')
+        self.assertNotIn('currency', data)
+
+    def test_only_unambiguous_general_or_exact_location_pay_range_is_selected(self):
+        for title in ('General Pay Range', 'New York, NY Salary Range'):
+            with self.subTest(title=title):
+                payload = job_payload()
+                payload['location']['name'] = 'New York, NY'
+                payload['pay_input_ranges'] = [
+                    {'title': 'Berlin Salary Range', 'min_cents': 9000000, 'max_cents': 10000000, 'currency_type': 'EUR'},
+                    {'title': title, 'min_cents': 14000000, 'max_cents': 15000000, 'currency_type': 'USD'},
+                ]
+                data = self.import_payload(payload)['data']
+                self.assertEqual(data['salary_min'], '140000.00')
+                self.assertEqual(data['salary_max'], '150000.00')
+                self.assertEqual(data['currency'], 'USD')
+
+    def test_conflicting_applicable_ranges_do_not_use_content_fallback(self):
+        payload = job_payload()
+        payload['content'] = '<p>Pay Range: $140,000 - $150,000 USD</p>'
+        payload['pay_input_ranges'] = [
+            {'title': 'General Pay Range', 'min_cents': 9000000, 'max_cents': 10000000, 'currency_type': 'USD'},
+            {'title': 'Global Pay Range', 'min_cents': 14000000, 'max_cents': 15000000, 'currency_type': 'USD'},
+        ]
+        data = self.import_payload(payload)['data']
+        self.assertNotIn('salary_min', data)
+        self.assertNotIn('currency', data)
+
+    def test_explicit_work_mode_content(self):
+        for content, mode in (
+            ('This is a hybrid role.', 'hybrid'),
+            ('Remote position', 'remote'),
+            ('On-site role', 'onsite'),
+            ('Work mode: Onsite', 'onsite'),
+            ('This role is remote.', 'remote'),
+            ('This is a fully remote position.', 'remote'),
+            ('Workplace type: Hybrid', 'hybrid'),
+        ):
+            with self.subTest(content=content):
+                payload = job_payload()
+                payload['content'] = f'<p>{content}</p>'
+                self.assertEqual(self.import_payload(payload)['data']['work_mode'], mode)
+
+    def test_ambiguous_or_negated_work_mode_is_not_imported(self):
+        for content in (
+            'We have an office and occasional remote work.',
+            'Flexible working with remote and hybrid options.',
+            'This is not a hybrid role.',
+            'Remote work may be available later.',
+            'This role is remote if needed.',
+            'This role is hybrid or remote.',
+            'This is a hybrid role if available.',
+            'Other teams are hiring remote positions.',
+            '<p>Hybrid role</p><p>Remote position</p>',
+            '<script>This is a hybrid role.</script><style>Remote position</style>',
+        ):
+            with self.subTest(content=content):
+                payload = job_payload()
+                payload['content'] = content
+                self.assertNotIn('work_mode', self.import_payload(payload)['data'])
+
+    def test_precise_primary_location_is_not_overwritten_or_guessed(self):
+        payload = job_payload()
+        payload['location']['name'] = 'Berlin, Germany'
+        payload['content'] = '<p>New York, NY - Hybrid</p>'
+        self.assertEqual(self.import_payload(payload)['data']['location'], 'Berlin, Germany')
+        payload['location']['name'] = 'Office - NYC'
+        payload['content'] = '<p>Flexible office working.</p>'
+        self.assertEqual(self.import_payload(payload)['data']['location'], 'Office - NYC')
+
+    def test_conflicting_content_locations_are_not_selected(self):
+        payload = job_payload()
+        payload['content'] = '<p>New York, NY - Hybrid</p><p>Berlin, Germany - Remote</p>'
+        data = self.import_payload(payload)['data']
+        self.assertEqual(data['location'], 'Office - NYC')
+        self.assertNotIn('work_mode', data)
+
+    def test_explicit_content_employment_and_metadata_precedence(self):
+        payload = job_payload()
+        payload['content'] = '<p>This is a full-time role.</p><p>This is a hybrid role.</p>'
+        data = self.import_payload(payload)['data']
+        self.assertEqual(data['employment_type'], 'full_time')
+        payload['metadata'] = [
+            {'name': 'Employment type', 'value': 'Contract'},
+            {'name': 'Work mode', 'value': 'On-site'},
+        ]
+        data = self.import_payload(payload)['data']
+        self.assertEqual(data['employment_type'], 'contract')
+        self.assertEqual(data['work_mode'], 'onsite')
+        payload['metadata'] = None
+        payload['content'] = '<p>Applicants must be authorized to work on a full-time basis.</p>'
+        self.assertNotIn('employment_type', self.import_payload(payload)['data'])
+
+    def test_content_pay_range_requires_label_currency_and_unique_range(self):
+        for content in (
+            '<p>Revenue was $140,000 - $150,000 USD.</p>',
+            '<p>Pay Range: $140,000 - $150,000</p>',
+            '<p>Pay Range: $140,000 - $150,000 USD</p><p>Pay Range: 90000 - 100000 EUR</p>',
+            '<p>Pay Range: $150,000 - $140,000 USD</p>',
+            '<script>Pay Range: $140,000 - $150,000 USD</script>',
+        ):
+            with self.subTest(content=content):
+                payload = job_payload()
+                payload['content'] = content
+                data = self.import_payload(payload)['data']
+                self.assertNotIn('salary_min', data)
+                self.assertNotIn('salary_max', data)
+                self.assertNotIn('currency', data)
 
     def test_only_explicit_employment_and_work_mode_metadata_is_mapped(self):
         payload = job_payload()

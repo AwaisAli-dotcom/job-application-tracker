@@ -229,15 +229,11 @@ document.querySelectorAll('[data-upload-zone]').forEach(function (zone) {
             }
 
             var count = 0;
-            var advancedImported = false;
             allowedFields.forEach(function (name) {
                 var field = form.elements[name];
                 var value = result.data[name];
-                // The untouched EUR default can be replaced by an explicit imported currency.
-                var isDefaultCurrency = name === 'currency' && importer.dataset.defaultCurrency &&
-                    field.value === importer.dataset.defaultCurrency;
                 if (value == null || value === '' || editedFields.has(name) ||
-                    (field.value.trim() && !isDefaultCurrency)) {
+                    field.value.trim()) {
                     return;
                 }
                 if (field.tagName === 'SELECT' && !Array.from(field.options).some(function (option) {
@@ -249,11 +245,7 @@ document.querySelectorAll('[data-upload-zone]').forEach(function (zone) {
                 field.dispatchEvent(new Event('input', {bubbles: true}));
                 field.dispatchEvent(new Event('change', {bubbles: true}));
                 count += 1;
-                advancedImported = advancedImported || ['company', 'job_title', 'location'].indexOf(name) === -1;
             });
-            if (advancedImported) {
-                form.querySelector('.more-details').open = true;
-            }
             var summary = count ? 'Imported ' + count + ' field' + (count === 1 ? '' : 's') +
                 '. Review them before saving.' : 'Your existing values were kept. Review them before saving.';
             showMessage(summary + (result.warnings.length ? ' ' + result.warnings.join(' ') : ''), false);

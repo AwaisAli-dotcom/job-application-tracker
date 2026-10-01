@@ -42,6 +42,8 @@ A private Django web app for tracking job applications from saved roles through 
 On Add Application, paste the URL of a specific job posting and select **Import details**.
 Review or edit the detected fields, then use **Save Application**. Importing creates no
 application or document, preserves entered values, and keeps the pasted URL.
+Imported optional fields stay inside the collapsed More details section until you
+open it. New application forms start with a blank currency rather than assuming EUR.
 
 The importer prefers schema.org `JobPosting` JSON-LD (including arrays and `@graph`).
 A conservative metadata/title fallback recognizes explicit "Role at Company" titles.
@@ -51,9 +53,12 @@ period warning because the tracker currently has no salary-period field.
 
 Greenhouse listing URLs on `job-boards.greenhouse.io` and `boards.greenhouse.io`
 use the public Job Board API first, including published pay-transparency ranges.
-Company, title, and location come from the API; employment type and work mode are
-imported only from explicitly named metadata fields. Missing values are left blank,
-multiple salary ranges are not combined, and the exact pasted URL is retained.
+Company, title, and location come from the API. Explicit role/location statements
+can refine generic locations and supply work mode or employment type when metadata
+is missing. If the API has no pay ranges, only an explicitly labelled Pay/Salary Range
+with a currency code can be imported from its content; arbitrary numbers are ignored.
+Missing values stay blank. Multiple pay ranges are selected only for an exact location
+or clearly general range, never merged. The exact pasted URL is retained.
 API failures fall back to the generic page importer within the same 8-second budget.
 No API key is required and importing never submits a job application to Greenhouse.
 

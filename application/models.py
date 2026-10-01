@@ -235,7 +235,8 @@ class JobApplication(models.Model):
 
     currency = models.CharField(
         max_length=3,
-        default='EUR',
+        blank=True,
+        default='',
         validators=[
             RegexValidator(
                 regex=r'^[A-Za-z]{3}$',
@@ -308,7 +309,7 @@ class JobApplication(models.Model):
         self.source = (self.source or '').strip()
         self.recruiter_name = (self.recruiter_name or '').strip()
         self.recruiter_email = (self.recruiter_email or '').strip().lower()
-        self.currency = (self.currency or 'EUR').strip().upper()
+        self.currency = (self.currency or '').strip().upper()
 
         if self.job_url and urlsplit(self.job_url).scheme.lower() not in {'http', 'https'}:
             errors['job_url'] = 'Enter a valid job URL using http:// or https://.'

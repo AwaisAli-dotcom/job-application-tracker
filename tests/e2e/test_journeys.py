@@ -552,7 +552,8 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.locator('[name="status"]')).to_have_value('applied')
         expect(self.page.locator('[name="application_date"]')).to_have_value(today)
         expect(self.page.locator('[name="recruiter_email"]')).to_have_value('')
-        expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+        expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+        self.page.get_by_text('More details', exact=True).click()
         expect(self.page.locator('[name="currency"]')).to_have_value('USD')
         expect(self.page.locator('[name="salary_min"]')).to_have_value('2500.00')
         expect(self.page.locator('[name="work_mode"]')).to_have_value('remote')
@@ -583,11 +584,13 @@ class BrowserJourneys(unittest.TestCase):
     def test_job_import_greenhouse_review_and_save(self):
         self.login_import_user()
         self.page.goto('/add/')
+        expect(self.page.locator('[name="currency"]')).to_have_value('')
         job_url = 'https://job-boards.greenhouse.io/drivewealth/jobs/5869146003?gh_jid=5869146003'
         self.page.locator('[name="job_url"]').fill(job_url)
         data = {
             'company': 'DriveWealth', 'job_title': 'Senior Accountant, Broker-Dealer Accounting',
-            'location': 'Office - NYC', 'job_url': job_url, 'source': 'Greenhouse',
+            'location': 'New York, NY', 'job_url': job_url, 'source': 'Greenhouse',
+            'salary_min': '140000.00', 'salary_max': '150000.00', 'currency': 'USD', 'work_mode': 'hybrid',
         }
         self.page.route('**/applications/import/', lambda route: route.fulfill(
             status=200, content_type='application/json', body=json.dumps({
@@ -598,7 +601,12 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_enabled()
         for field, value in data.items():
             expect(self.page.locator(f'[name="{field}"]')).to_have_value(value)
+        expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+        self.page.get_by_text('More details', exact=True).click()
         expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+        for field in ('salary_min', 'salary_max', 'currency', 'work_mode', 'source'):
+            expect(self.page.locator(f'[name="{field}"]')).to_have_value(data[field])
+        self.page.locator('[name="salary_min"]').fill('142000')
         expect(self.page).to_have_url(re.compile(r'/add/$'))
         reviewed_title = 'Senior Accountant - reviewed'
         self.page.locator('[name="job_title"]').fill(reviewed_title)
@@ -613,7 +621,11 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.get_by_role('heading', name='DriveWealth', exact=True)).to_be_visible()
         application_card = self.page.locator('.job-card').filter(has_text='DriveWealth')
         expect(application_card).to_contain_text(reviewed_title)
-        expect(application_card).to_contain_text('Office - NYC')
+        expect(application_card).to_contain_text('New York, NY')
+        expect(application_card).to_contain_text('Hybrid')
+        expect(application_card).to_contain_text('142000.00')
+        expect(application_card).to_contain_text('150000.00')
+        expect(application_card).to_contain_text('USD')
         expect(application_card.get_by_role('link', name=job_url, exact=True)).to_have_attribute('href', job_url)
 
     def test_job_import_failure_then_manual_save(self):
@@ -631,6 +643,7 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('button', name='Import details', exact=True).click()
         expect(self.page.locator('[data-import-message]')).to_contain_text('enter the details manually')
         expect(self.page.get_by_role('button', name='Import details', exact=True)).to_be_enabled()
+        expect(self.page.locator('[name="currency"]')).to_have_value('')
         expect(self.page.locator('[name="company"]')).to_have_value(company)
         expect(self.page.locator('[name="job_url"]')).to_have_value(job_url)
         expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')

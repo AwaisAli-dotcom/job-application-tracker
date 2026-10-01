@@ -30,7 +30,7 @@
         {% if job %}
             {% include 'application/_form_field.html' with field=form.job_url %}
         {% else %}
-            <div class="job-import-field" data-job-import="{% url 'application_import' %}" data-default-currency="{% if not form.is_bound %}EUR{% endif %}">
+            <div class="job-import-field" data-job-import="{% url 'application_import' %}">
                 {% include 'application/_form_field.html' with field=form.job_url %}
                 <button type="button" class="secondary-button job-import-button" data-import-button>Import details</button>
                 <p class="job-import-message" data-import-message role="status" aria-live="polite" aria-atomic="true"></p>

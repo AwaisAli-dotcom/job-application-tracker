@@ -651,7 +651,13 @@ class ModelValidationTests(TestCase):
 
     def test_application_defaults_and_string_representation(self):
         self.assertEqual(self.application.status, 'saved')
+        self.assertEqual(self.application.currency, '')
         self.assertEqual(str(self.application), 'Model Company - Engineer')
+
+    def test_model_allows_unknown_currency_without_inventing_one(self):
+        self.application.currency = ''
+        self.application.full_clean()
+        self.assertEqual(self.application.currency, '')
 
     def test_model_rejects_invalid_salary_range(self):
         self.application.salary_min = 4000
@@ -1143,6 +1149,8 @@ class JobApplicationKanbanTests(TestCase):
 
     def test_owner_can_update_status(self):
         self.client.login(username='kanbanuser', password='testpass123')
+        self.application.currency = ''
+        self.application.save(update_fields=['currency'])
 
         response = self.client.post(
             reverse('application_status_update', args=[self.application.pk]),
@@ -1157,6 +1165,7 @@ class JobApplicationKanbanTests(TestCase):
         )
         self.application.refresh_from_db()
         self.assertEqual(self.application.status, 'interview')
+        self.assertEqual(self.application.currency, '')
         self.assertTrue(
             StatusHistory.objects.filter(
                 user=self.user,
@@ -2489,8 +2498,28 @@ class ApplicationEditorWorkflowTests(TestCase):
         self.assertRedirects(response, reverse('application_list'))
         application = JobApplication.objects.get(company='Focused Company')
         self.assertEqual(application.user, self.user)
-        self.assertEqual(application.currency, 'EUR')
+        self.assertEqual(application.currency, '')
         self.assertEqual(application.source, '')
+
+    def test_add_currency_is_blank_and_manual_currency_is_preserved(self):
+        response = self.client.get(reverse('application_create'))
+        self.assertEqual(response.context['form']['currency'].value(), '')
+        response = self.client.post(reverse('application_create'), self.required_application_data(currency='usd'))
+        self.assertRedirects(response, reverse('application_list'))
+        application = JobApplication.objects.get(company='Focused Company')
+        self.assertEqual(application.currency, 'USD')
+
+    def test_edit_preserves_existing_currency(self):
+        application = JobApplication.objects.create(user=self.user, **self.required_application_data(currency='EUR'))
+        response = self.client.get(reverse('application_update', args=[application.pk]))
+        self.assertEqual(response.context['form']['currency'].value(), 'EUR')
+        response = self.client.post(
+            reverse('application_update', args=[application.pk]),
+            self.required_application_data(currency='EUR', job_title='Reviewed Developer'),
+        )
+        self.assertRedirects(response, reverse('application_list'))
+        application.refresh_from_db()
+        self.assertEqual(application.currency, 'EUR')
 
     def test_more_details_are_collapsed_for_add_and_save_advanced_fields(self):
         response = self.client.get(reverse('application_create'))
