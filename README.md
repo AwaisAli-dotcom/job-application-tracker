@@ -49,16 +49,26 @@ It can detect company, title, location, employment type, work mode, structured s
 currency, and source. Salary amounts retain their original period; review the inline
 period warning because the tracker currently has no salary-period field.
 
+Greenhouse listing URLs on `job-boards.greenhouse.io` and `boards.greenhouse.io`
+use the public Job Board API first, including published pay-transparency ranges.
+Company, title, and location come from the API; employment type and work mode are
+imported only from explicitly named metadata fields. Missing values are left blank,
+multiple salary ranges are not combined, and the exact pasted URL is retained.
+API failures fall back to the generic page importer within the same 8-second budget.
+No API key is required and importing never submits a job application to Greenhouse.
+
 Support depends on the public page's data. LinkedIn, Indeed, and other platforms may
 block ordinary requests; login, CAPTCHA, and JavaScript-only pages are not bypassed.
-Manual entry remains available after a failed import. No provider-specific scraping,
-credentials, scraping APIs, or new dependencies are used.
+Manual entry remains available after a failed import. No credentials, paid scraping
+APIs, or new dependencies are used.
 
 Requests require login and CSRF, with a limit of 10 imports per user per minute.
 Only public HTTP/HTTPS destinations on standard ports are accepted. All resolved IPs
 and every redirect are checked; connections use the validated IP with normal TLS
 hostname verification. Fetching is limited to 8 seconds, 3 redirects, and 1 MB of
-uncompressed HTML. Page content is held only in memory and is not logged or stored.
+uncompressed HTML or API JSON per response. The same protected fetcher handles both;
+the generic importer still accepts HTML only. Content is held only in memory and is
+not logged or stored.
 
 ## Local Setup
 

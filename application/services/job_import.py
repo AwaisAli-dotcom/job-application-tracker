@@ -14,6 +14,8 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
+from . import greenhouse
+
 
 MAX_URL_LENGTH = 200
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -166,8 +168,9 @@ class PublicConnection(http.client.HTTPConnection):
             raise
 
 
-def fetch_public_html(url):
-    deadline = time.monotonic() + FETCH_TIMEOUT
+def fetch_public_content(url, accepted_types, *, deadline=None):
+    if deadline is None:
+        deadline = time.monotonic() + FETCH_TIMEOUT
     current_url = url
     for redirect_count in range(MAX_REDIRECTS + 1):
         parts, host, port = validate_job_url(current_url)
@@ -194,7 +197,7 @@ def fetch_public_html(url):
                 path += '?' + quote(parts.query, safe="%/?@:!$&'()*+,;=-._~")
             connection.request('GET', path, headers={
                 'User-Agent': 'JobApplicationTracker/1.0 (public job details importer)',
-                'Accept': 'text/html, application/xhtml+xml',
+                'Accept': ', '.join(accepted_types),
                 'Accept-Encoding': 'identity',
                 'Connection': 'close',
             })
@@ -208,7 +211,7 @@ def fetch_public_html(url):
             if response.status != 200:
                 raise JobImportError()
             content_type = response.getheader('Content-Type', '').split(';')[0].strip().lower()
-            if content_type not in {'text/html', 'application/xhtml+xml'}:
+            if content_type not in accepted_types:
                 raise JobImportError()
             if response.getheader('Content-Encoding', 'identity').lower() != 'identity':
                 raise JobImportError()
@@ -239,6 +242,18 @@ def fetch_public_html(url):
                 response.close()
             connection.close()
     raise JobImportError()
+
+
+def fetch_public_html(url, *, deadline=None):
+    return fetch_public_content(url, ('text/html', 'application/xhtml+xml'), deadline=deadline)
+
+
+def fetch_public_json(url, *, deadline=None):
+    body, _ = fetch_public_content(url, ('application/json',), deadline=deadline)
+    try:
+        return json.loads(body)
+    except (ValueError, RecursionError):
+        raise JobImportError() from None
 
 
 class JobPageParser(HTMLParser):
@@ -495,7 +510,28 @@ def parse_job_html(html, url):
 
 
 def import_job_details(url):
-    html, final_url = fetch_public_html(url)
+    validate_job_url(url)
+    reference = greenhouse.job_reference(url)
+    if reference:
+        started = time.monotonic()
+        deadline = started + FETCH_TIMEOUT
+        try:
+            # Reserve half the total fetch budget for the generic fallback.
+            posting, warnings = greenhouse.fetch_job_posting(
+                reference, fetch_public_json, started + FETCH_TIMEOUT / 2,
+            )
+            data, normalization_warnings = normalize_job(posting)
+            if not any(data.get(field) for field in ('company', 'job_title', 'location')):
+                raise JobImportError()
+            data.update(job_url=url, source='Greenhouse')
+            warnings.extend(normalization_warnings)
+            if not all(data.get(field) for field in ('company', 'job_title', 'location')):
+                warnings.append('Some details could not be detected. Complete the remaining fields manually.')
+            return {'data': data, 'imported_fields': list(data), 'warnings': warnings}
+        except (JobImportError, ValueError, RecursionError):
+            html, final_url = fetch_public_html(url, deadline=deadline)
+    else:
+        html, final_url = fetch_public_html(url)
     try:
         result = parse_job_html(html, final_url)
     except (ValueError, RecursionError):

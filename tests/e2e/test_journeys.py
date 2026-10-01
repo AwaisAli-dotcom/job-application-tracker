@@ -580,6 +580,42 @@ class BrowserJourneys(unittest.TestCase):
         expect(application_card).to_contain_text('Keep my personal notes')
         expect(self.page.locator('.activity-card').filter(has=self.page.get_by_role('heading', name='Documents'))).to_contain_text('reviewed-cv')
 
+    def test_job_import_greenhouse_review_and_save(self):
+        self.login_import_user()
+        self.page.goto('/add/')
+        job_url = 'https://job-boards.greenhouse.io/drivewealth/jobs/5869146003?gh_jid=5869146003'
+        self.page.locator('[name="job_url"]').fill(job_url)
+        data = {
+            'company': 'DriveWealth', 'job_title': 'Senior Accountant, Broker-Dealer Accounting',
+            'location': 'Office - NYC', 'job_url': job_url, 'source': 'Greenhouse',
+        }
+        self.page.route('**/applications/import/', lambda route: route.fulfill(
+            status=200, content_type='application/json', body=json.dumps({
+                'ok': True, 'data': data, 'imported_fields': list(data), 'warnings': [],
+            }),
+        ))
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_enabled()
+        for field, value in data.items():
+            expect(self.page.locator(f'[name="{field}"]')).to_have_value(value)
+        expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+        expect(self.page).to_have_url(re.compile(r'/add/$'))
+        reviewed_title = 'Senior Accountant - reviewed'
+        self.page.locator('[name="job_title"]').fill(reviewed_title)
+        self.page.locator('[name="application_date"]').fill(
+            datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+        )
+        self.page.get_by_role('button', name='Save Application').click()
+        expect(self.page).to_have_url(re.compile(r'/applications/$'))
+        self.page.locator('.job-card').filter(has_text='DriveWealth').get_by_role(
+            'link', name=f'View DriveWealth application for {reviewed_title}', exact=True,
+        ).click()
+        expect(self.page.get_by_role('heading', name='DriveWealth', exact=True)).to_be_visible()
+        application_card = self.page.locator('.job-card').filter(has_text='DriveWealth')
+        expect(application_card).to_contain_text(reviewed_title)
+        expect(application_card).to_contain_text('Office - NYC')
+        expect(application_card.get_by_role('link', name=job_url, exact=True)).to_have_attribute('href', job_url)
+
     def test_job_import_failure_then_manual_save(self):
         self.login_import_user()
         self.page.goto('/add/')
