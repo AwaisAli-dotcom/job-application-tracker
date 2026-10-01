@@ -628,6 +628,48 @@ class BrowserJourneys(unittest.TestCase):
         expect(application_card).to_contain_text('USD')
         expect(application_card.get_by_role('link', name=job_url, exact=True)).to_have_attribute('href', job_url)
 
+    def test_job_import_greenhouse_eu_review_and_save(self):
+        self.login_import_user()
+        self.page.goto('/add/')
+        job_url = 'https://job-boards.eu.greenhouse.io/pinecagroup/jobs/4988463101?gh_jid=4988463101'
+        self.page.locator('[name="job_url"]').fill(job_url)
+        expect(self.page.locator('[name="currency"]')).to_have_value('')
+        data = {
+            'company': 'Pineca Group', 'job_title': 'Senior Marketing Project Manager',
+            'location': 'Vilnius, Lithuania', 'job_url': job_url, 'source': 'Greenhouse',
+            'salary_min': '3500.00', 'salary_max': '5000.00', 'currency': 'EUR', 'work_mode': 'hybrid',
+        }
+        self.page.route('**/applications/import/', lambda route: route.fulfill(
+            status=200, content_type='application/json', body=json.dumps({
+                'ok': True, 'data': data, 'imported_fields': list(data), 'warnings': [],
+            }),
+        ))
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_enabled()
+        for field, value in data.items():
+            expect(self.page.locator(f'[name="{field}"]')).to_have_value(value)
+        expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+        self.page.get_by_text('More details', exact=True).click()
+        for field in ('salary_min', 'salary_max', 'currency', 'work_mode', 'source'):
+            expect(self.page.locator(f'[name="{field}"]')).to_have_value(data[field])
+        self.page.locator('[name="salary_min"]').fill('3600')
+        self.page.locator('[name="application_date"]').fill(
+            datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+        )
+        self.page.get_by_role('button', name='Save Application').click()
+        expect(self.page).to_have_url(re.compile(r'/applications/$'))
+        self.page.locator('.job-card').filter(has_text='Pineca Group').get_by_role(
+            'link', name='View Pineca Group application for Senior Marketing Project Manager', exact=True,
+        ).click()
+        application_card = self.page.locator('.job-card').filter(has_text='Pineca Group')
+        for value in ('Vilnius, Lithuania', 'Hybrid', '3600.00', '5000.00', 'EUR', 'Greenhouse'):
+            expect(application_card).to_contain_text(value)
+        expect(application_card.get_by_role('link', name=job_url, exact=True)).to_have_attribute('href', job_url)
+        application_card.get_by_role('link', name='Edit', exact=True).click()
+        expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+        expect(self.page.locator('[name="salary_min"]')).to_have_value('3600.00')
+        expect(self.page.locator('[name="currency"]')).to_have_value('EUR')
+
     def test_job_import_failure_then_manual_save(self):
         self.login_import_user()
         self.page.goto('/add/')

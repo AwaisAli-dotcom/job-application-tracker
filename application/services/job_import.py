@@ -365,7 +365,7 @@ def salary_number(value):
         return ''
 
 
-def normalize_job(posting):
+def normalize_job(posting, *, include_remote_location=True):
     data = {}
     warnings = []
     company = posting.get('hiringOrganization', {})
@@ -397,7 +397,8 @@ def normalize_job(posting):
         if not locations:
             locations = [country_name(value) for value in as_list(posting.get('applicantLocationRequirements', []))]
         locations = [location for location in locations if location]
-        locations.append('Remote')
+        if include_remote_location or not locations:
+            locations.append('Remote')
     location = clean_text(' / '.join(locations), 150)
     if location:
         data['location'] = location
@@ -520,7 +521,7 @@ def import_job_details(url):
             posting, warnings = greenhouse.fetch_job_posting(
                 reference, fetch_public_json, started + FETCH_TIMEOUT / 2,
             )
-            data, normalization_warnings = normalize_job(posting)
+            data, normalization_warnings = normalize_job(posting, include_remote_location=False)
             if not any(data.get(field) for field in ('company', 'job_title', 'location')):
                 raise JobImportError()
             data.update(job_url=url, source='Greenhouse')

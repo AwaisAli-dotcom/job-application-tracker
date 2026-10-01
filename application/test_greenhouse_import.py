@@ -14,6 +14,8 @@ from .test_job_import import FIXTURE, PUBLIC_ADDRESS, response_mock
 
 GREENHOUSE_URL = 'https://job-boards.greenhouse.io/drivewealth/jobs/5869146003?gh_jid=5869146003'
 API_URL = 'https://boards-api.greenhouse.io/v1/boards/drivewealth/jobs/5869146003?pay_transparency=true'
+EU_URL = 'https://job-boards.eu.greenhouse.io/pinecagroup/jobs/4988463101?gh_jid=4988463101'
+EU_API_URL = 'https://boards-api.greenhouse.io/v1/boards/pinecagroup/jobs/4988463101?pay_transparency=true'
 
 
 def job_payload():
@@ -52,6 +54,33 @@ class GreenhouseAdapterTests(SimpleTestCase):
         with patch.object(job_import, 'fetch_public_json', return_value=job_payload()):
             self.assertEqual(job_import.import_job_details(url)['data']['job_url'], url)
 
+    def test_eu_host_uses_public_api_and_preserves_pasted_url(self):
+        payload = dict(job_payload(), id=4988463101, company_name='Pineca Group')
+        for url in (EU_URL, EU_URL.split('?')[0], EU_URL + '&ref=review#application'):
+            with self.subTest(url=url), patch.object(job_import, 'fetch_public_json', return_value=payload) as fetch:
+                with patch.object(job_import, 'fetch_public_html') as generic:
+                    result = job_import.import_job_details(url)
+                self.assertEqual(greenhouse.job_reference(url), ('pinecagroup', '4988463101'))
+                self.assertEqual(fetch.call_args.args, (EU_API_URL,))
+                generic.assert_not_called()
+                self.assertEqual(result['data']['company'], 'Pineca Group')
+                self.assertEqual(result['data']['job_url'], url)
+                self.assertEqual(result['data']['source'], 'Greenhouse')
+                for field in ('salary_min', 'salary_max', 'currency'):
+                    self.assertNotIn(field, result['data'])
+
+    def test_eu_content_maps_labelled_monthly_salary_and_hybrid_model(self):
+        payload = dict(job_payload(), id=4988463101, company_name='Pineca Group', location={'name': 'Vilnius, Lithuania'})
+        payload['content'] = (Path(settings.BASE_DIR) / 'tests/fixtures/greenhouse_eu_job_content.html').read_text(encoding='utf-8')
+        with patch.object(job_import, 'fetch_public_json', return_value=payload):
+            data = job_import.import_job_details(EU_URL)['data']
+        self.assertEqual(data['location'], 'Vilnius, Lithuania')
+        self.assertEqual(data['work_mode'], 'hybrid')
+        self.assertEqual(data['salary_min'], '3500.00')
+        self.assertEqual(data['salary_max'], '5000.00')
+        self.assertEqual(data['currency'], 'EUR')
+        self.assertNotIn('employment_type', data)
+
     def test_detection_rejects_invalid_ids_paths_and_lookalike_hosts(self):
         for url in (
             'https://job-boards.greenhouse.io/drivewealth/jobs/not-a-number',
@@ -61,6 +90,8 @@ class GreenhouseAdapterTests(SimpleTestCase):
             'https://job-boards.greenhouse.io/drivewealth/jobs/?gh_jid=5869146003',
             'https://job-boards.greenhouse.io.evil.example.com/drivewealth/jobs/5869146003',
             'https://job-boards.greenhouse.io/%2e%2e/jobs/5869146003',
+            EU_URL.replace('4988463101', 'invalid'),
+            EU_URL.replace('job-boards.eu.greenhouse.io', 'job-boards.eu.greenhouse.io.evil.example.com'),
         ):
             with self.subTest(url=url), patch.object(job_import, 'fetch_public_json') as api:
                 with patch.object(job_import, 'fetch_public_html', return_value=(FIXTURE, url)) as generic:
@@ -94,6 +125,57 @@ class GreenhouseAdapterTests(SimpleTestCase):
         self.assertEqual(result['data']['salary_max'], '150000.00')
         self.assertEqual(result['data']['currency'], 'USD')
         self.assertIn('pay period', ' '.join(result['warnings']))
+
+    def test_structured_eur_monthly_salary_and_precedence(self):
+        payload = job_payload()
+        payload['pay_input_ranges'] = [{'min_cents': 330000, 'max_cents': 480000, 'currency_type': 'EUR'}]
+        payload['content'] = '<p>Salary: EUR 3,500 - 5,000 gross per month</p>'
+        data = self.import_payload(payload)['data']
+        self.assertEqual(data['salary_min'], '3300.00')
+        self.assertEqual(data['salary_max'], '4800.00')
+        self.assertEqual(data['currency'], 'EUR')
+
+    def test_explicit_labelled_salary_formats(self):
+        for content, minimum, maximum, currency in (
+            ('Salary: \u20ac3,300 - \u20ac4,800 gross per month', '3300.00', '4800.00', 'EUR'),
+            ('Competitive salary: EUR 3,500 - 5,000 gross per month based on your skills and experience.', '3500.00', '5000.00', 'EUR'),
+            ('Pay range: $140,000 - $150,000 USD', '140000.00', '150000.00', 'USD'),
+            ('Compensation: USD 120,000\u2013140,000', '120000.00', '140000.00', 'USD'),
+            ('Annual salary: \u00a350,000 - \u00a360,000 per year', '50000.00', '60000.00', 'GBP'),
+            ('<h4>Salary range</h4><p>EUR 3,300 - 4,800 gross per month</p>', '3300.00', '4800.00', 'EUR'),
+        ):
+            with self.subTest(content=content):
+                payload = job_payload()
+                payload['content'] = f'<div>{content}</div>'
+                data = self.import_payload(payload)['data']
+                self.assertEqual(data['salary_min'], minimum)
+                self.assertEqual(data['salary_max'], maximum)
+                self.assertEqual(data['currency'], currency)
+
+    def test_labelled_salary_without_reliable_currency_leaves_currency_blank(self):
+        for content in ('Salary: 3300 - 4800 per month', 'Pay Range: $140,000 - $150,000'):
+            with self.subTest(content=content):
+                payload = dict(job_payload(), content=f'<p>{content}</p>')
+                data = self.import_payload(payload)['data']
+                self.assertIn('salary_min', data)
+                self.assertIn('salary_max', data)
+                self.assertNotIn('currency', data)
+
+    def test_unlabelled_numbers_and_conflicting_pay_ranges_are_not_salary(self):
+        for content in (
+            '<p>\u20ac3,300 - \u20ac4,800 gross per month</p>',
+            '<h4>Benefits</h4><p>USD 120,000 - 140,000</p>',
+            '<p>Our team grew from 3300 to 4800 employees.</p>',
+            '<p>Salary: 3300 - 4800 EUR</p><p>Salary: 5000 - 6000 EUR</p>',
+            '<p>Salary: 3300 - 4800 EUR per month</p><p>Salary: 3300 - 4800 EUR per year</p>',
+            '<p>Salary: \u20ac3300 - \u00a34800</p>',
+            '<p>Salary: $3300 - $4800 EUR</p>',
+            '<p>Salary: EUR 3,30 - 4800</p>',
+        ):
+            with self.subTest(content=content):
+                data = self.import_payload(dict(job_payload(), content=content))['data']
+                for field in ('salary_min', 'salary_max', 'currency'):
+                    self.assertNotIn(field, data)
 
     def test_salary_absent_does_not_scrape_description_or_invent_amounts(self):
         payload = job_payload()
@@ -185,6 +267,23 @@ class GreenhouseAdapterTests(SimpleTestCase):
             ('This role is remote.', 'remote'),
             ('This is a fully remote position.', 'remote'),
             ('Workplace type: Hybrid', 'hybrid'),
+            ('Hybrid', 'hybrid'),
+            ('Hybrid working model', 'hybrid'),
+            ('Hybrid work model: three office days per week.', 'hybrid'),
+            ('Hybrid working model: work from the office Monday to Wednesday, and enjoy the flexibility to work from home the rest of the week.', 'hybrid'),
+            ('Remote', 'remote'),
+            ('Fully remote', 'remote'),
+            ('Remote, EU', 'remote'),
+            ('Remote - EU', 'remote'),
+            ('Remote, Ireland', 'remote'),
+            ('Remote within Europe', 'remote'),
+            ('On-site', 'onsite'),
+            ('Onsite', 'onsite'),
+            ('On site', 'onsite'),
+            ('Office-based', 'onsite'),
+            ('Office based', 'onsite'),
+            ('This role is based on site.', 'onsite'),
+            ('On-site in Vilnius', 'onsite'),
         ):
             with self.subTest(content=content):
                 payload = job_payload()
@@ -201,6 +300,11 @@ class GreenhouseAdapterTests(SimpleTestCase):
             'This role is hybrid or remote.',
             'This is a hybrid role if available.',
             'Other teams are hiring remote positions.',
+            'Remote collaboration with an international team.',
+            'We offer a flexible workplace and an office available for meetings.',
+            'Occasional work from home.',
+            'Hybrid working model may be available.',
+            'This role is not based on site.',
             '<p>Hybrid role</p><p>Remote position</p>',
             '<script>This is a hybrid role.</script><style>Remote position</style>',
         ):
@@ -217,6 +321,36 @@ class GreenhouseAdapterTests(SimpleTestCase):
         payload['location']['name'] = 'Office - NYC'
         payload['content'] = '<p>Flexible office working.</p>'
         self.assertEqual(self.import_payload(payload)['data']['location'], 'Office - NYC')
+
+    def test_primary_location_separates_geography_and_work_mode(self):
+        for primary, location, mode in (
+            ('Vilnius, Lithuania - Hybrid', 'Vilnius, Lithuania', 'hybrid'),
+            ('New York, NY - Hybrid', 'New York, NY', 'hybrid'),
+            ('Remote, EU', 'EU', 'remote'),
+            ('Remote - EU', 'EU', 'remote'),
+            ('Remote, Ireland', 'Ireland', 'remote'),
+            ('Remote within Europe', 'Europe', 'remote'),
+            ('On-site in Vilnius', 'Vilnius', 'onsite'),
+        ):
+            with self.subTest(primary=primary):
+                payload = dict(job_payload(), location={'name': primary})
+                data = self.import_payload(payload)['data']
+                self.assertEqual(data['location'], location)
+                self.assertEqual(data['work_mode'], mode)
+
+    def test_content_location_refines_generic_but_preserves_precise_api_location(self):
+        for content, expected, mode in (
+            ('Vilnius, Lithuania - Hybrid', 'Vilnius, Lithuania', 'hybrid'),
+            ('Remote, EU', 'EU', 'remote'),
+            ('Remote, Ireland', 'Ireland', 'remote'),
+        ):
+            with self.subTest(content=content):
+                payload = dict(job_payload(), location={'name': 'Office'}, content=f'<p>{content}</p>')
+                data = self.import_payload(payload)['data']
+                self.assertEqual(data['location'], expected)
+                self.assertEqual(data['work_mode'], mode)
+                payload['location']['name'] = 'Vilnius, Lithuania'
+                self.assertEqual(self.import_payload(payload)['data']['location'], 'Vilnius, Lithuania')
 
     def test_conflicting_content_locations_are_not_selected(self):
         payload = job_payload()
@@ -241,10 +375,9 @@ class GreenhouseAdapterTests(SimpleTestCase):
         payload['content'] = '<p>Applicants must be authorized to work on a full-time basis.</p>'
         self.assertNotIn('employment_type', self.import_payload(payload)['data'])
 
-    def test_content_pay_range_requires_label_currency_and_unique_range(self):
+    def test_content_pay_range_requires_label_and_unique_valid_range(self):
         for content in (
             '<p>Revenue was $140,000 - $150,000 USD.</p>',
-            '<p>Pay Range: $140,000 - $150,000</p>',
             '<p>Pay Range: $140,000 - $150,000 USD</p><p>Pay Range: 90000 - 100000 EUR</p>',
             '<p>Pay Range: $150,000 - $140,000 USD</p>',
             '<script>Pay Range: $140,000 - $150,000 USD</script>',
@@ -293,6 +426,18 @@ class GreenhouseAdapterTests(SimpleTestCase):
         self.assertEqual(result['data']['job_url'], GREENHOUSE_URL)
         self.assertEqual(result['data']['source'], 'Greenhouse')
 
+    def test_unknown_eu_board_falls_back_with_original_url_and_deadline(self):
+        url = EU_URL.replace('pinecagroup', 'unknown-board')
+        api_url = EU_API_URL.replace('pinecagroup', 'unknown-board')
+        with patch.object(job_import.time, 'monotonic', return_value=10):
+            with patch.object(job_import, 'fetch_public_json', side_effect=job_import.JobImportError()) as api:
+                with patch.object(job_import, 'fetch_public_html', return_value=(FIXTURE, url)) as generic:
+                    data = job_import.import_job_details(url)['data']
+        api.assert_called_once_with(api_url, deadline=14)
+        generic.assert_called_once_with(url, deadline=18)
+        self.assertEqual(data['job_url'], url)
+        self.assertEqual(data['source'], 'Greenhouse')
+
     def test_bad_job_response_falls_back_without_guessing(self):
         for payload in (None, [], {}, {'id': True}, {'id': 123}, {'id': 5869146003}):
             with self.subTest(payload=payload), patch.object(job_import, 'fetch_public_json', return_value=payload):
@@ -317,6 +462,24 @@ class GreenhouseNetworkTests(SimpleTestCase):
     def test_valid_json_uses_existing_pinned_connection(self):
         response = response_mock(json.dumps(job_payload()).encode(), headers={'Content-Type': 'application/json; charset=utf-8'})
         self.assertEqual(self.fetch_response(response), job_payload())
+
+    def test_eu_adapter_uses_existing_validated_pinned_connection(self):
+        payload = dict(job_payload(), id=4988463101)
+        with patch.object(job_import.time, 'monotonic', return_value=10), patch.object(
+            job_import, 'resolve_public_host', return_value=PUBLIC_ADDRESS,
+        ) as resolve:
+            with patch.object(job_import, 'PublicConnection') as connection:
+                connection.return_value.getresponse.return_value = response_mock(
+                    json.dumps(payload).encode(), headers={'Content-Type': 'application/json'},
+                )
+                data = job_import.import_job_details(EU_URL)['data']
+        self.assertEqual(data['job_url'], EU_URL)
+        self.assertEqual(resolve.call_args.args, ('boards-api.greenhouse.io', 443, 14))
+        self.assertEqual(connection.call_args.args[2], PUBLIC_ADDRESS)
+        self.assertEqual(connection.call_args.args[4], 14)
+        self.assertEqual(connection.return_value.request.call_args.args[:2], (
+            'GET', '/v1/boards/pinecagroup/jobs/4988463101?pay_transparency=true',
+        ))
 
     def test_json_fetch_rejects_private_redirects_bad_types_size_timeout_and_malformed_json(self):
         for response in (

@@ -51,12 +51,17 @@ It can detect company, title, location, employment type, work mode, structured s
 currency, and source. Salary amounts retain their original period; review the inline
 period warning because the tracker currently has no salary-period field.
 
-Greenhouse listing URLs on `job-boards.greenhouse.io` and `boards.greenhouse.io`
-use the public Job Board API first, including published pay-transparency ranges.
+Greenhouse listing URLs on `job-boards.greenhouse.io`, `job-boards.eu.greenhouse.io`,
+and `boards.greenhouse.io` use the shared public Job Board API first, including
+published pay-transparency ranges.
 Company, title, and location come from the API. Explicit role/location statements
 can refine generic locations and supply work mode or employment type when metadata
-is missing. If the API has no pay ranges, only an explicitly labelled Pay/Salary Range
-with a currency code can be imported from its content; arbitrary numbers are ignored.
+is missing. Explicit Hybrid/Remote/On-site and office-based wording is recognized;
+combined location labels keep geography separate from work mode. If the API has no
+pay ranges, explicitly labelled salary/pay/compensation ranges can be imported from
+its content, including monthly gross pay. Currency codes and unambiguous euro/pound
+symbols are recognized; a dollar sign alone does not imply USD. Arbitrary numbers
+are ignored, and currency stays blank when no reliable currency is provided.
 Missing values stay blank. Multiple pay ranges are selected only for an exact location
 or clearly general range, never merged. The exact pasted URL is retained.
 API failures fall back to the generic page importer within the same 8-second budget.

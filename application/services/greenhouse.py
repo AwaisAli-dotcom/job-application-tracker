@@ -8,8 +8,9 @@ from urllib.parse import urlsplit
 
 
 API_ROOT = 'https://boards-api.greenhouse.io/v1/boards'
-BOARD_HOSTS = {'job-boards.greenhouse.io', 'boards.greenhouse.io'}
-WORK_MODE_PATTERN = r'(hybrid|remote|on[- ]?site)'
+# EU hosted boards also use the public, shared Job Board API above.
+BOARD_HOSTS = {'job-boards.greenhouse.io', 'job-boards.eu.greenhouse.io', 'boards.greenhouse.io'}
+WORK_MODE_PATTERN = r'(hybrid|remote|on[- ]?site|office[- ]based)'
 EMPLOYMENT_PATTERN = r'(full[- ]time|part[- ]time|contract|temporary|internship)'
 
 
@@ -73,28 +74,74 @@ def content_location(lines):
         # Only standalone locations or explicit job-location statements qualify.
         match = re.fullmatch(
             rf'(?:(?:job location|work location|location|locations|this role is open to candidates in the following locations)\s*:\s*)?'
-            rf'([\w .\'()-]+, [\w .\'()-]+)\s+[-\u2013\u2014|]\s+{WORK_MODE_PATTERN}[.]?',
+            rf'([\w .\'()-]+(?:, [\w .\'()-]+)*)\s+[-\u2013\u2014|]\s+{WORK_MODE_PATTERN}[.]?',
             line, re.I,
         )
         if match:
-            locations.add((match[1].strip(), match[2].upper().replace('-', '_').replace(' ', '_')))
+            locations.add((match[1].strip(), work_mode_value(match[2])))
+        match = re.fullmatch(
+            rf'(?:(?:job location|work location|location)\s*:\s*)?(?:fully )?{WORK_MODE_PATTERN}'
+            r'(?:\s*[,\u2013\u2014-]\s*|\s+(?:in|within)\s+)([\w .\'()-]+(?:, [\w .\'()-]+)*)[.]?',
+            line, re.I,
+        )
+        if match and match[2][0].isupper():
+            locations.add((match[2].strip().rstrip('.'), work_mode_value(match[1])))
     return next(iter(locations)) if len(locations) == 1 else (None, None)
 
 
-def content_salary(lines):
-    number = r'([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)'
-    ranges = set()
+def work_mode_value(value):
+    value = value.upper().replace('-', '_').replace(' ', '_')
+    return 'ON_SITE' if value in {'OFFICE_BASED', 'ONSITE'} else value
+
+
+def explicit_work_modes(lines):
+    values = {work_mode_value(value) for value in explicit_role_values(
+        lines, WORK_MODE_PATTERN, r'(?:work mode|workplace type|work arrangement)',
+    )}
     for line in lines:
+        for expression in (
+            rf'^(?:fully )?{WORK_MODE_PATTERN}[.]?$',
+            rf'^{WORK_MODE_PATTERN} (?:working|work) model(?:[.:]|$)',
+            r'\b(?:this|the) role is based (on site)(?=[.,;]|$)',
+        ):
+            match = re.search(expression, line, re.I)
+            if match:
+                values.add(work_mode_value(match[1]))
+    return values
+
+
+def content_salary(lines):
+    number = r'[0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?'
+    currency = r'(?:[$\u20ac\u00a3]|(?!per\b)[A-Za-z]{3}\b)'
+    label = r'(?:competitive\s+)?(?:(?:base|annual|monthly)\s+)?(?:salary|pay|compensation)(?:\s+range)?\s*[:\-]?\s*'
+    ranges = set()
+    for index, line in enumerate(lines):
+        labelled = re.match(rf'^{label}', line, re.I)
+        if not labelled:
+            continue
+        text = line[labelled.end():]
+        if not text and index + 1 < len(lines):
+            text = lines[index + 1]
         match = re.fullmatch(
-            rf'(?:pay|salary|base salary) range\s*:\s*[$\u20ac\u00a3]?{number}\s*[-\u2013\u2014]\s*'
-            rf'[$\u20ac\u00a3]?{number}\s+([A-Za-z]{{3}})(?:\s+(?:per|/)\s*(?:year|month|week|day|hour))?[.]?',
-            line, re.I,
+            rf'(?P<first>{currency})?\s*(?P<minimum>{number})\s*(?P<second>{currency})?\s*[-\u2013\u2014]\s*'
+            rf'(?P<third>{currency})?\s*(?P<maximum>{number})\s*(?P<fourth>{currency})?'
+            r'(?:\s+(?:gross|net|base))?(?:\s+(?:per|/)\s*(?P<period>year|annum|month|week|day|hour))?'
+            r'(?:\s+(?:gross|net))?(?:\s+(?:based on|depending on|commensurate with)\s+[^.!?;]{1,160})?[.]?',
+            text, re.I,
         )
         if match:
-            ranges.add((match[1].replace(',', ''), match[2].replace(',', ''), match[3].upper()))
+            tokens = {match[name].upper() for name in ('first', 'second', 'third', 'fourth') if match[name]}
+            currencies = {'\u20ac': 'EUR', '\u00a3': 'GBP'}
+            currencies = {currencies.get(token, token) for token in tokens if token != '$'}
+            if len(currencies) > 1 or ('$' in tokens and currencies and not currencies <= {'USD', 'CAD', 'AUD', 'NZD', 'SGD', 'HKD'}):
+                return None
+            ranges.add((
+                match['minimum'].replace(',', ''), match['maximum'].replace(',', ''),
+                next(iter(currencies), ''), (match['period'] or '').lower(),
+            ))
     if len(ranges) == 1:
-        minimum, maximum, currency = ranges.pop()
-        return {'currency': currency, 'value': {'minValue': minimum, 'maxValue': maximum}}
+        minimum, maximum, currency, period = ranges.pop()
+        return {'currency': currency, 'value': {'minValue': minimum, 'maxValue': maximum, 'unitText': period}}
     return None
 
 
@@ -168,15 +215,24 @@ def fetch_job_posting(reference, fetch_json, deadline):
     lines = content_lines(payload.get('content'))
     precise_location, location_mode = content_location(lines)
     primary_location = posting['jobLocation']
+    primary_mode = None
+    if isinstance(primary_location, str):
+        normalized_location, primary_mode = content_location([primary_location])
+        if normalized_location:
+            posting['jobLocation'] = normalized_location
     if precise_location and (
         not primary_location or (isinstance(primary_location, str) and re.fullmatch(
             r'office(?:\s*[-:]\s*.+)?|remote|hybrid|on[- ]?site', primary_location.strip(), re.I,
         ))
     ):
         posting['jobLocation'] = precise_location
-    explicit_modes = explicit_role_values(lines, WORK_MODE_PATTERN, r'(?:work mode|workplace type|work arrangement)')
+    explicit_modes = explicit_work_modes(lines)
     if location_mode:
         explicit_modes.add(location_mode)
+    if primary_mode:
+        explicit_modes.add(primary_mode)
+    elif isinstance(primary_location, str):
+        explicit_modes.update(explicit_work_modes([primary_location]))
     metadata_modes = posting.get('jobLocationType', [])
     if not any(isinstance(value, str) and value.strip().upper().replace('-', '_').replace(' ', '_')
                in {'HYBRID', 'REMOTE', 'TELECOMMUTE', 'ON_SITE', 'ONSITE'} for value in metadata_modes):
