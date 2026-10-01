@@ -1,4 +1,5 @@
 import csv
+import logging
 from collections import Counter
 from datetime import date
 from urllib.parse import urlencode
@@ -26,12 +27,14 @@ from .forms import (
     ApplicationDocumentForm,
     InterviewForm,
     JobApplicationForm,
+    JobImportForm,
     ProfileForm,
     RegistrationForm,
     ReminderForm,
     create_uploaded_application_document,
 )
-from .throttling import limit_registration_requests
+from .throttling import consume_request_limit, limit_registration_requests
+from .services.job_import import JobImportError, MANUAL_MESSAGE, URL_MESSAGE, import_job_details
 
 
 ADVANCED_APPLICATION_FIELDS = (
@@ -903,6 +906,34 @@ def update_application_status(request, pk):
 
     messages.success(request, 'Application status updated.')
     return redirect('kanban_board')
+
+
+@login_required
+@require_POST
+def application_import(request):
+    retry_after = consume_request_limit(
+        'job_import_user', str(request.user.pk), limit=10, window_seconds=60,
+    )
+    if retry_after is not None:
+        response = JsonResponse({
+            'ok': False,
+            'message': 'Please wait a minute before importing another job page.',
+        }, status=429)
+        response['Retry-After'] = str(retry_after)
+        return response
+
+    form = JobImportForm(request.POST)
+    if not form.is_valid():
+        return JsonResponse({'ok': False, 'message': URL_MESSAGE}, status=400)
+    try:
+        result = import_job_details(form.cleaned_data['url'])
+    except JobImportError as error:
+        return JsonResponse({'ok': False, 'message': str(error)}, status=400)
+    except Exception:
+        # Do not put fetched content, submitted URLs, or exception details in logs.
+        logging.getLogger(__name__).error('Job details import failed unexpectedly.')
+        return JsonResponse({'ok': False, 'message': MANUAL_MESSAGE}, status=502)
+    return JsonResponse({'ok': True, **result})
 
 
 @login_required

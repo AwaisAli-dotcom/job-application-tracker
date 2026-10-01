@@ -151,3 +151,121 @@ document.querySelectorAll('[data-upload-zone]').forEach(function (zone) {
         input.dispatchEvent(new Event('change', {bubbles: true}));
     });
 });
+
+(function initializeJobImport() {
+    var importer = document.querySelector('[data-job-import]');
+    if (!importer) {
+        return;
+    }
+
+    var form = importer.closest('form');
+    var urlInput = form.elements.job_url;
+    var button = importer.querySelector('[data-import-button]');
+    var message = importer.querySelector('[data-import-message]');
+    var allowedFields = [
+        'company', 'job_title', 'location', 'employment_type', 'work_mode',
+        'salary_min', 'salary_max', 'currency', 'source'
+    ];
+    var editedFields = new Set();
+    var pending = false;
+
+    allowedFields.forEach(function (name) {
+        ['input', 'change'].forEach(function (eventName) {
+            form.elements[name].addEventListener(eventName, function (event) {
+                if (event.isTrusted) {
+                    editedFields.add(name);
+                }
+            });
+        });
+    });
+
+    function showMessage(text, isError) {
+        message.textContent = text;
+        message.classList.toggle('is-error', Boolean(isError));
+    }
+
+    urlInput.addEventListener('input', function () {
+        if (!pending) {
+            button.textContent = 'Import details';
+            showMessage('', false);
+        }
+    });
+
+    button.addEventListener('click', async function () {
+        if (pending) {
+            return;
+        }
+        var requestedUrl = urlInput.value.trim();
+        if (!requestedUrl) {
+            showMessage('Paste the URL of a specific job posting first.', true);
+            urlInput.focus();
+            return;
+        }
+        pending = true;
+        button.disabled = true;
+        button.textContent = 'Importing...';
+        importer.setAttribute('aria-busy', 'true');
+        showMessage('Importing job details...', false);
+        var controller = new AbortController();
+        var timeout = window.setTimeout(function () { controller.abort(); }, 12000);
+        var imported = false;
+
+        try {
+            var response = await fetch(importer.dataset.jobImport, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'X-CSRFToken': form.elements.csrfmiddlewaretoken.value},
+                body: new URLSearchParams({url: requestedUrl}),
+                signal: controller.signal
+            });
+            var result = await response.json();
+            if (urlInput.value.trim() !== requestedUrl) {
+                showMessage('The Job URL changed. Import again for the new URL.', false);
+                return;
+            }
+            if (!response.ok || !result.ok) {
+                showMessage(result.message || 'Import failed. You can still enter the details manually.', true);
+                return;
+            }
+
+            var count = 0;
+            var advancedImported = false;
+            allowedFields.forEach(function (name) {
+                var field = form.elements[name];
+                var value = result.data[name];
+                // The untouched EUR default can be replaced by an explicit imported currency.
+                var isDefaultCurrency = name === 'currency' && importer.dataset.defaultCurrency &&
+                    field.value === importer.dataset.defaultCurrency;
+                if (value == null || value === '' || editedFields.has(name) ||
+                    (field.value.trim() && !isDefaultCurrency)) {
+                    return;
+                }
+                if (field.tagName === 'SELECT' && !Array.from(field.options).some(function (option) {
+                    return option.value === String(value);
+                })) {
+                    return;
+                }
+                field.value = String(value);
+                field.dispatchEvent(new Event('input', {bubbles: true}));
+                field.dispatchEvent(new Event('change', {bubbles: true}));
+                count += 1;
+                advancedImported = advancedImported || ['company', 'job_title', 'location'].indexOf(name) === -1;
+            });
+            if (advancedImported) {
+                form.querySelector('.more-details').open = true;
+            }
+            var summary = count ? 'Imported ' + count + ' field' + (count === 1 ? '' : 's') +
+                '. Review them before saving.' : 'Your existing values were kept. Review them before saving.';
+            showMessage(summary + (result.warnings.length ? ' ' + result.warnings.join(' ') : ''), false);
+            imported = true;
+        } catch (error) {
+            showMessage("We couldn't access this job page. You can still complete the form manually.", true);
+        } finally {
+            window.clearTimeout(timeout);
+            pending = false;
+            button.disabled = false;
+            button.textContent = imported ? 'Imported' : 'Import details';
+            importer.removeAttribute('aria-busy');
+        }
+    });
+}());

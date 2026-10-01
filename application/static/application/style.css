@@ -2298,6 +2298,66 @@ h3 {
     font-weight: 500;
 }
 
+.job-import-field {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 8px;
+}
+
+.form-card .job-import-button {
+    grid-column: 2;
+    grid-row: 1;
+    min-height: var(--control-height);
+    margin-top: 27px;
+    color: #344556;
+    background: var(--color-surface);
+    border-color: var(--color-border-strong);
+    box-shadow: none;
+    white-space: nowrap;
+}
+
+.form-card .job-import-button:hover {
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
+    border-color: #9fb6ca;
+}
+
+.form-card .job-import-button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.form-card .job-import-message {
+    grid-column: 1 / -1;
+    margin: 5px 0 0;
+    color: var(--color-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.job-import-message:empty {
+    display: none;
+}
+
+.job-import-message.is-error {
+    color: var(--color-danger);
+}
+
+@media (max-width: 480px) {
+    .job-import-field {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .form-card .job-import-button {
+        grid-column: 1;
+        grid-row: auto;
+        justify-self: start;
+        margin-top: 6px;
+    }
+}
+
 .inline-upload-section {
     padding: 16px;
     background: var(--color-surface-subtle);

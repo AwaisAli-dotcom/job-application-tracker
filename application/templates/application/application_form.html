@@ -27,7 +27,15 @@
         {% include 'application/_form_field.html' with field=form.location %}
         {% include 'application/_form_field.html' with field=form.status %}
         {% include 'application/_form_field.html' with field=form.application_date %}
-        {% include 'application/_form_field.html' with field=form.job_url %}
+        {% if job %}
+            {% include 'application/_form_field.html' with field=form.job_url %}
+        {% else %}
+            <div class="job-import-field" data-job-import="{% url 'application_import' %}" data-default-currency="{% if not form.is_bound %}EUR{% endif %}">
+                {% include 'application/_form_field.html' with field=form.job_url %}
+                <button type="button" class="secondary-button job-import-button" data-import-button>Import details</button>
+                <p class="job-import-message" data-import-message role="status" aria-live="polite" aria-atomic="true"></p>
+            </div>
+        {% endif %}
 
         <section class="inline-upload-section" aria-labelledby="application-documents-heading">
             <div class="section-heading-row">

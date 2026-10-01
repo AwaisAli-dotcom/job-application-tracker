@@ -1,6 +1,7 @@
 """Run with: python -m unittest discover -s tests/e2e -v"""
 
 import os
+import json
 import re
 import secrets
 import shutil
@@ -144,6 +145,17 @@ class BrowserJourneys(unittest.TestCase):
     def logout(self):
         self.page.locator('summary[aria-label="Open account menu"]').click()
         self.page.get_by_role('button', name='Log out').click()
+
+    def login_import_user(self):
+        username = getattr(type(self), 'import_username', None)
+        if username is None:
+            type(self).import_username = self.register()
+            return
+        self.page.goto('/accounts/login/')
+        self.page.locator('[name="username"]').fill(username)
+        self.page.locator('[name="password"]').fill(PASSWORD)
+        self.page.get_by_role('button', name='Log In').click()
+        expect(self.page).to_have_url(re.compile(r'/dashboard/$'))
 
     def add_application(self, company, include_documents=False, include_more_details=False):
         self.page.goto('/add/')
@@ -492,6 +504,131 @@ class BrowserJourneys(unittest.TestCase):
         self.page.get_by_role('link', name='Delete', exact=True).first.click()
         self.page.get_by_role('button', name='Yes, delete it').click()
         expect(self.page.locator('.job-card').filter(has_text=company)).to_have_count(0)
+
+    def test_job_import_review_and_save(self):
+        self.login_import_user()
+        self.page.goto('/add/')
+        company = f'Reviewed Company {uuid4().hex[:6]}'
+        job_url = 'https://careers.example.com/jobs/python?ref=review'
+        today = datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+        self.page.locator('[name="company"]').fill(company)
+        self.page.locator('[name="notes"]').fill('Keep my personal notes')
+        self.page.locator('[name="status"]').select_option('applied')
+        self.page.locator('[name="application_date"]').fill(today)
+        self.page.locator('[name="job_url"]').fill(job_url)
+        self.page.locator('[name="cv_file"]').set_input_files({
+            'name': 'reviewed-cv.pdf', 'mimeType': 'application/pdf',
+            'buffer': b'%PDF-1.4\nReviewed CV\n%%EOF',
+        })
+        pending = []
+        self.page.route('**/applications/import/', lambda route: pending.append(route))
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        button = self.page.get_by_role('button', name='Importing...', exact=True)
+        expect(button).to_be_disabled()
+        expect(self.page.locator('[data-import-message]')).to_have_text('Importing job details...')
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].request.method, 'POST')
+        self.assertIn('x-csrftoken', pending[0].request.headers)
+        self.assertIn('url=', pending[0].request.post_data)
+        self.page.locator('[name="job_title"]').fill('Entered during import')
+        data = {
+            'company': 'Imported employer', 'job_title': 'Imported title',
+            'location': 'Vilnius, Lithuania / Remote', 'employment_type': 'full_time',
+            'work_mode': 'remote', 'salary_min': '2500.00', 'salary_max': '3500.00',
+            'currency': 'USD', 'source': 'Greenhouse',
+            'job_url': 'https://example.com/canonical',
+            'notes': 'Must not be imported', 'status': 'rejected',
+            'application_date': '2099-01-01', 'recruiter_email': 'unexpected@example.com',
+        }
+        pending[0].fulfill(status=200, content_type='application/json', body=json.dumps({
+            'ok': True, 'data': data, 'imported_fields': list(data), 'warnings': [],
+        }))
+        expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_enabled()
+        expect(self.page.locator('[data-import-message]')).to_contain_text('Review them before saving.')
+        expect(self.page.locator('[name="company"]')).to_have_value(company)
+        expect(self.page.locator('[name="job_title"]')).to_have_value('Entered during import')
+        expect(self.page.locator('[name="job_url"]')).to_have_value(job_url)
+        expect(self.page.locator('[name="notes"]')).to_have_value('Keep my personal notes')
+        expect(self.page.locator('[name="status"]')).to_have_value('applied')
+        expect(self.page.locator('[name="application_date"]')).to_have_value(today)
+        expect(self.page.locator('[name="recruiter_email"]')).to_have_value('')
+        expect(self.page.locator('details.more-details')).to_have_attribute('open', '')
+        expect(self.page.locator('[name="currency"]')).to_have_value('USD')
+        expect(self.page.locator('[name="salary_min"]')).to_have_value('2500.00')
+        expect(self.page.locator('[name="work_mode"]')).to_have_value('remote')
+        self.assertEqual(self.page.locator('[name="cv_file"]').evaluate('(input) => input.files[0].name'), 'reviewed-cv.pdf')
+        expect(self.page).to_have_url(re.compile(r'/add/$'))
+        self.page.locator('[name="job_title"]').fill('Reviewed Python Developer')
+        ARTIFACTS.mkdir(exist_ok=True)
+        self.page.screenshot(path=str(ARTIFACTS / 'job-import-desktop.png'), full_page=True)
+        self.page.set_viewport_size({'width': 390, 'height': 844})
+        expect(self.page.locator('#app-sidebar')).to_have_css('visibility', 'hidden')
+        self.assertFalse(self.page.evaluate('document.documentElement.scrollWidth > innerWidth'))
+        expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_visible()
+        self.page.screenshot(path=str(ARTIFACTS / 'job-import-mobile.png'), full_page=True)
+        self.page.set_viewport_size({'width': 1440, 'height': 900})
+        self.page.get_by_role('button', name='Save Application').click()
+        expect(self.page).to_have_url(re.compile(r'/applications/$'))
+        self.page.locator('.job-card').filter(has_text=company).get_by_role(
+            'link', name=f'View {company} application for Reviewed Python Developer', exact=True
+        ).click()
+        expect(self.page.get_by_role('heading', name=company, exact=True)).to_be_visible()
+        application_card = self.page.locator('.job-card').filter(has_text=company)
+        expect(application_card).to_contain_text('Reviewed Python Developer')
+        expect(application_card).to_contain_text('2500.00')
+        expect(application_card).to_contain_text('USD')
+        expect(application_card).to_contain_text('Keep my personal notes')
+        expect(self.page.locator('.activity-card').filter(has=self.page.get_by_role('heading', name='Documents'))).to_contain_text('reviewed-cv')
+
+    def test_job_import_failure_then_manual_save(self):
+        self.login_import_user()
+        self.page.goto('/add/')
+        company = f'Manual Import {uuid4().hex[:6]}'
+        job_url = 'https://careers.example.com/jobs/blocked'
+        self.page.locator('[name="company"]').fill(company)
+        self.page.locator('[name="job_url"]').fill(job_url)
+        self.page.route('**/applications/import/', lambda route: route.fulfill(
+            status=400, content_type='application/json', body=json.dumps({
+                'ok': False, 'message': "We couldn't import details from this page automatically. You can still enter the details manually.",
+            }),
+        ))
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.locator('[data-import-message]')).to_contain_text('enter the details manually')
+        expect(self.page.get_by_role('button', name='Import details', exact=True)).to_be_enabled()
+        expect(self.page.locator('[name="company"]')).to_have_value(company)
+        expect(self.page.locator('[name="job_url"]')).to_have_value(job_url)
+        expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+        self.page.locator('[name="job_title"]').fill('Manual Developer')
+        self.page.locator('[name="location"]').fill('Vilnius')
+        self.page.locator('[name="application_date"]').fill(
+            datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+        )
+        self.page.get_by_role('button', name='Save Application').click()
+        expect(self.page.locator('.job-card').filter(has_text=company)).to_contain_text('Manual Developer')
+
+    def test_job_import_keeps_changed_url_and_entered_currency(self):
+        self.login_import_user()
+        self.page.goto('/add/')
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.locator('[data-import-message]')).to_contain_text('Paste the URL')
+        self.page.get_by_text('More details', exact=True).click()
+        self.page.locator('[name="currency"]').fill('GBP')
+        self.page.locator('[name="job_url"]').fill('https://example.com/jobs/first')
+        pending = []
+        self.page.route('**/applications/import/', lambda route: pending.append(route))
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.get_by_role('button', name='Importing...', exact=True)).to_be_disabled()
+        self.page.locator('[name="job_url"]').fill('https://example.com/jobs/second')
+        result = {'ok': True, 'data': {'job_title': 'Engineer', 'currency': 'USD'}, 'warnings': []}
+        pending[0].fulfill(status=200, content_type='application/json', body=json.dumps(result))
+        expect(self.page.locator('[data-import-message]')).to_contain_text('Job URL changed')
+        expect(self.page.locator('[name="job_title"]')).to_have_value('')
+        expect(self.page.locator('[name="job_url"]')).to_have_value('https://example.com/jobs/second')
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.get_by_role('button', name='Importing...', exact=True)).to_be_disabled()
+        pending[1].fulfill(status=200, content_type='application/json', body=json.dumps(result))
+        expect(self.page.locator('[name="job_title"]')).to_have_value('Engineer')
+        expect(self.page.locator('[name="currency"]')).to_have_value('GBP')
 
     def test_second_user_cannot_access_private_records(self):
         self.register()

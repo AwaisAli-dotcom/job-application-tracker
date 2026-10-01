@@ -7,6 +7,7 @@ A private Django web app for tracking job applications from saved roles through 
 - Public home, About, and Privacy pages
 - Email-aware registration, login, POST logout, account editing, password change, and email password reset
 - User-owned job applications with create, list, detail, edit, and delete workflows
+- Import public job listing details into the Add form for review before saving
 - Search by company, title, and location
 - Filters by status, employment type, and application date range
 - Sorting and pagination with query parameter preservation
@@ -35,6 +36,29 @@ A private Django web app for tracking job applications from saved roles through 
 - django-axes and database-backed request throttling for sign-in and account recovery
 - Gunicorn for production WSGI serving
 - Vercel deployment from GitHub
+
+## Job URL Import
+
+On Add Application, paste the URL of a specific job posting and select **Import details**.
+Review or edit the detected fields, then use **Save Application**. Importing creates no
+application or document, preserves entered values, and keeps the pasted URL.
+
+The importer prefers schema.org `JobPosting` JSON-LD (including arrays and `@graph`).
+A conservative metadata/title fallback recognizes explicit "Role at Company" titles.
+It can detect company, title, location, employment type, work mode, structured salary,
+currency, and source. Salary amounts retain their original period; review the inline
+period warning because the tracker currently has no salary-period field.
+
+Support depends on the public page's data. LinkedIn, Indeed, and other platforms may
+block ordinary requests; login, CAPTCHA, and JavaScript-only pages are not bypassed.
+Manual entry remains available after a failed import. No provider-specific scraping,
+credentials, scraping APIs, or new dependencies are used.
+
+Requests require login and CSRF, with a limit of 10 imports per user per minute.
+Only public HTTP/HTTPS destinations on standard ports are accepted. All resolved IPs
+and every redirect are checked; connections use the validated IP with normal TLS
+hostname verification. Fetching is limited to 8 seconds, 3 redirects, and 1 MB of
+uncompressed HTML. Page content is held only in memory and is not logged or stored.
 
 ## Local Setup
 

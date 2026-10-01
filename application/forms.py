@@ -16,6 +16,7 @@ from .models import (
     document_content_type,
     validate_document_file,
 )
+from .services.job_import import JobImportError, validate_job_url
 
 
 User = get_user_model()
@@ -194,6 +195,18 @@ class JobApplicationForm(forms.ModelForm):
             self.add_error('deadline', 'Deadline cannot be before the application date.')
 
         return cleaned_data
+
+
+class JobImportForm(forms.Form):
+    url = forms.CharField(max_length=200)
+
+    def clean_url(self):
+        url = self.cleaned_data['url']
+        try:
+            validate_job_url(url)
+        except JobImportError as error:
+            raise forms.ValidationError(str(error)) from None
+        return url
 
 
 class ApplicationAttachmentsForm(forms.Form):
