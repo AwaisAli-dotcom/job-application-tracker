@@ -1,0 +1,18 @@
+{
+  "id": "5ac21346-8e0c-4494-8e7a-3eb92ff77902",
+  "text": "Backend Engineer",
+  "categories": {
+    "location": "Remote - Europe",
+    "allLocations": ["Remote - Europe"],
+    "commitment": "Full-time",
+    "team": "Engineering",
+    "department": "Product"
+  },
+  "workplaceType": "remote",
+  "salaryRange": {"currency": "EUR", "interval": "per-year-salary", "min": 50000, "max": 60000},
+  "description": "<p>Build reliable services with our international team.</p>",
+  "additional": "",
+  "lists": [],
+  "hostedUrl": "https://jobs.lever.co/example-site/5ac21346-8e0c-4494-8e7a-3eb92ff77902",
+  "applyUrl": "https://jobs.lever.co/example-site/5ac21346-8e0c-4494-8e7a-3eb92ff77902/apply"
+}

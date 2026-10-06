@@ -14,7 +14,7 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
-from . import greenhouse
+from . import greenhouse, lever
 
 
 MAX_URL_LENGTH = 200
@@ -510,21 +510,68 @@ def parse_job_html(html, url):
     return {'data': data, 'imported_fields': list(data), 'warnings': warnings}
 
 
+def lever_company_from_html(html, url, job_title):
+    parser = JobPageParser()
+    parser.feed(html)
+    title = clean_text(''.join(parser.title), 285)
+    if any(marker in title.lower() for marker in (
+        'just a moment', 'access denied', 'captcha', 'sign in', 'log in', 'verify you are human',
+    )):
+        return ''
+    companies = set()
+    posting_count = 0
+    for script in parser.scripts:
+        try:
+            for posting in find_job_postings(json.loads(script)):
+                posting_count += 1
+                if posting_count > 100:
+                    return ''
+                if clean_text(posting.get('title'), 160).casefold() != job_title.casefold():
+                    continue
+                target = posting.get('url') or posting.get('@id')
+                if target and (not isinstance(target, str) or lever.job_reference(urljoin(url, target)) != lever.job_reference(url)):
+                    continue
+                company = posting.get('hiringOrganization')
+                company = company.get('name') if isinstance(company, dict) else company
+                company = clean_text(company, 120)
+                if len(company) >= 2:
+                    companies.add(company)
+        except (ValueError, RecursionError):
+            continue
+    if companies:
+        return next(iter(companies)) if len(companies) == 1 else ''
+    return clean_text(lever.company_from_titles([
+        clean_text(parser.metadata.get('og:title'), 285), title,
+    ], job_title), 120)
+
+
 def import_job_details(url):
     validate_job_url(url)
     reference = greenhouse.job_reference(url)
+    lever_reference = lever.job_reference(url)
+    adapter = greenhouse if reference else lever
+    reference = reference or lever_reference
     if reference:
         started = time.monotonic()
         deadline = started + FETCH_TIMEOUT
         try:
             # Reserve half the total fetch budget for the generic fallback.
-            posting, warnings = greenhouse.fetch_job_posting(
+            posting, warnings = adapter.fetch_job_posting(
                 reference, fetch_public_json, started + FETCH_TIMEOUT / 2,
             )
             data, normalization_warnings = normalize_job(posting, include_remote_location=False)
             if not any(data.get(field) for field in ('company', 'job_title', 'location')):
                 raise JobImportError()
-            data.update(job_url=url, source='Greenhouse')
+            if adapter is lever and data.get('job_title'):
+                try:
+                    company_html, company_url = fetch_public_html(url, deadline=deadline)
+                    if lever.job_reference(company_url) == reference:
+                        company = lever_company_from_html(company_html, company_url, data['job_title'])
+                        if len(company) >= 2:
+                            data['company'] = company
+                except (JobImportError, ValueError, RecursionError):
+                    pass
+            data.update(job_url=url, source='Greenhouse' if adapter is greenhouse else 'Lever')
             warnings.extend(normalization_warnings)
             if not all(data.get(field) for field in ('company', 'job_title', 'location')):
                 warnings.append('Some details could not be detected. Complete the remaining fields manually.')
@@ -538,4 +585,6 @@ def import_job_details(url):
     except (ValueError, RecursionError):
         raise JobImportError() from None
     result['data']['job_url'] = url
+    if lever_reference:
+        result['data']['source'] = 'Lever'
     return result

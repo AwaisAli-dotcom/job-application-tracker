@@ -670,6 +670,81 @@ class BrowserJourneys(unittest.TestCase):
         expect(self.page.locator('[name="salary_min"]')).to_have_value('3600.00')
         expect(self.page.locator('[name="currency"]')).to_have_value('EUR')
 
+    def test_job_import_lever_review_and_save(self):
+        self.login_import_user()
+        for host, company, mode in (
+            ('jobs.lever.co', 'Lever Global Example', 'remote'),
+            ('jobs.eu.lever.co', 'Lever EU Example', 'hybrid'),
+        ):
+            with self.subTest(host=host):
+                self.page.goto('/add/')
+                job_url = f'https://{host}/example-site/5ac21346-8e0c-4494-8e7a-3eb92ff77902?lever-source=tracker'
+                self.page.locator('[name="job_url"]').fill(job_url)
+                self.page.locator('[name="notes"]').fill('Keep my Lever application notes')
+                self.page.locator('[name="status"]').select_option('saved')
+                data = {
+                    'company': company, 'job_title': 'Backend Engineer', 'location': 'Europe',
+                    'job_url': job_url, 'source': 'Lever', 'employment_type': 'full_time',
+                    'salary_min': '50000.00', 'salary_max': '60000.00', 'currency': 'EUR', 'work_mode': mode,
+                }
+                pending = []
+                self.page.route('**/applications/import/', lambda route: pending.append(route))
+                self.page.get_by_role('button', name='Import details', exact=True).click()
+                expect(self.page.get_by_role('button', name='Importing...', exact=True)).to_be_disabled()
+                pending[0].fulfill(status=200, content_type='application/json', body=json.dumps({
+                    'ok': True, 'data': data, 'imported_fields': list(data), 'warnings': [],
+                }))
+                expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_enabled()
+                for field, value in data.items():
+                    expect(self.page.locator(f'[name="{field}"]')).to_have_value(value)
+                expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+                expect(self.page.locator('[name="notes"]')).to_have_value('Keep my Lever application notes')
+                expect(self.page.locator('[name="status"]')).to_have_value('saved')
+                expect(self.page).to_have_url(re.compile(r'/add/$'))
+                self.page.get_by_text('More details', exact=True).click()
+                for field in ('employment_type', 'salary_min', 'salary_max', 'currency', 'work_mode', 'source'):
+                    expect(self.page.locator(f'[name="{field}"]')).to_have_value(data[field])
+                self.page.locator('[name="job_title"]').fill('Reviewed Lever Engineer')
+                self.page.locator('[name="salary_min"]').fill('51000')
+                self.page.locator('[name="application_date"]').fill(
+                    datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+                )
+                self.page.get_by_role('button', name='Save Application').click()
+                expect(self.page).to_have_url(re.compile(r'/applications/$'))
+                self.page.locator('.job-card').filter(has_text=company).get_by_role(
+                    'link', name=f'View {company} application for Reviewed Lever Engineer', exact=True,
+                ).click()
+                application_card = self.page.locator('.job-card').filter(has_text=company)
+                for value in ('Reviewed Lever Engineer', '51000.00', '60000.00', 'EUR', 'Lever', 'Keep my Lever application notes'):
+                    expect(application_card).to_contain_text(value)
+                expect(application_card.get_by_role('link', name=job_url, exact=True)).to_have_attribute('href', job_url)
+                self.page.unroute('**/applications/import/')
+
+    def test_job_import_lever_failure_then_manual_save(self):
+        self.login_import_user()
+        self.page.goto('/add/')
+        job_url = 'https://jobs.lever.co/example-site/5ac21346-8e0c-4494-8e7a-3eb92ff77902'
+        company = f'Lever Manual {uuid4().hex[:6]}'
+        self.page.locator('[name="company"]').fill(company)
+        self.page.locator('[name="job_url"]').fill(job_url)
+        self.page.route('**/applications/import/', lambda route: route.fulfill(
+            status=400, content_type='application/json', body=json.dumps({
+                'ok': False, 'message': "We couldn't import details from this page automatically. You can still enter the details manually.",
+            }),
+        ))
+        self.page.get_by_role('button', name='Import details', exact=True).click()
+        expect(self.page.locator('[data-import-message]')).to_contain_text('enter the details manually')
+        expect(self.page.locator('[name="company"]')).to_have_value(company)
+        expect(self.page.locator('[name="job_url"]')).to_have_value(job_url)
+        expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+        self.page.locator('[name="job_title"]').fill('Manual Lever Engineer')
+        self.page.locator('[name="location"]').fill('Vilnius')
+        self.page.locator('[name="application_date"]').fill(
+            datetime.now(ZoneInfo('Europe/Vilnius')).date().isoformat()
+        )
+        self.page.get_by_role('button', name='Save Application').click()
+        expect(self.page.locator('.job-card').filter(has_text=company)).to_contain_text('Manual Lever Engineer')
+
     def test_job_import_failure_then_manual_save(self):
         self.login_import_user()
         self.page.goto('/add/')

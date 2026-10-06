@@ -67,6 +67,19 @@ or clearly general range, never merged. The exact pasted URL is retained.
 API failures fall back to the generic page importer within the same 8-second budget.
 No API key is required and importing never submits a job application to Greenhouse.
 
+Lever URLs on `jobs.lever.co/<site>/<posting-id>` and
+`jobs.eu.lever.co/<site>/<posting-id>` use the matching global or EU public
+[Postings API](https://github.com/lever/postings-api) first. Only individual published
+postings are retrieved; the application-submission API is never used. The API supplies
+title, location, commitment, workplace type, and structured salary where present.
+Explicitly labelled pay text is a conservative fallback, not arbitrary numbers.
+Geography is separated from explicit work mode; uncertain values stay blank.
+Company names come from matching public-page JobPosting metadata or a title that
+ends with the exact API job title, never from title-casing the site slug. If the page
+cannot be read or has no reliable company name, the available API fields are kept
+and Company can be entered manually. Both requests share the existing 8-second
+budget and protected fetcher. API failures fall back to the generic importer.
+
 Support depends on the public page's data. LinkedIn, Indeed, and other platforms may
 block ordinary requests; login, CAPTCHA, and JavaScript-only pages are not bypassed.
 Manual entry remains available after a failed import. No credentials, paid scraping
