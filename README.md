@@ -73,6 +73,10 @@ Lever URLs on `jobs.lever.co/<site>/<posting-id>` and
 postings are retrieved; the application-submission API is never used. The API supplies
 title, location, commitment, workplace type, and structured salary where present.
 Explicitly labelled pay text is a conservative fallback, not arbitrary numbers.
+Lever plaintext descriptions and salary sections support monthly/yearly labels,
+gross/net notation, spaced thousands, and separate bonus suffixes without annualizing
+amounts or adding bonuses to the maximum. Reliable workplace types (including
+Lever's `onsite` spelling) take priority; generic perks do not determine work mode.
 Geography is separated from explicit work mode; uncertain values stay blank.
 Company names come from matching public-page JobPosting metadata or a title that
 ends with the exact API job title, never from title-casing the site slug. If the page

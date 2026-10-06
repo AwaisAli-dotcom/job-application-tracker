@@ -720,6 +720,37 @@ class BrowserJourneys(unittest.TestCase):
                 expect(application_card.get_by_role('link', name=job_url, exact=True)).to_have_attribute('href', job_url)
                 self.page.unroute('**/applications/import/')
 
+    def test_job_import_lever_burga_values_stay_collapsed(self):
+        self.login_import_user()
+        for posting_id, title, location, mode, minimum, maximum in (
+            ('b90b7d2f-2514-4b3c-95c2-a40522adfc49', 'Maintenance Engineer', 'Kaunas', 'onsite', '2800.00', '3300.00'),
+            ('15cb03a7-b462-4cfa-9690-3de60a0a7c4a', 'Creative Strategist', 'Vilnius', 'hybrid', '3000.00', '4000.00'),
+        ):
+            with self.subTest(title=title):
+                self.page.goto('/add/')
+                job_url = f'https://jobs.lever.co/burga/{posting_id}'
+                self.page.locator('[name="job_url"]').fill(job_url)
+                data = {
+                    'company': 'BURGA', 'job_title': title, 'location': location, 'job_url': job_url,
+                    'work_mode': mode, 'salary_min': minimum, 'salary_max': maximum,
+                    'currency': 'EUR', 'source': 'Lever',
+                }
+                self.page.route('**/applications/import/', lambda route: route.fulfill(
+                    status=200, content_type='application/json', body=json.dumps({
+                        'ok': True, 'data': data, 'imported_fields': list(data), 'warnings': [],
+                    }),
+                ))
+                self.page.get_by_role('button', name='Import details', exact=True).click()
+                expect(self.page.get_by_role('button', name='Imported', exact=True)).to_be_enabled()
+                for field in ('company', 'job_title', 'location', 'job_url'):
+                    expect(self.page.locator(f'[name="{field}"]')).to_have_value(data[field])
+                expect(self.page.locator('details.more-details')).not_to_have_attribute('open', '')
+                self.page.get_by_text('More details', exact=True).click()
+                for field in ('work_mode', 'salary_min', 'salary_max', 'currency', 'source'):
+                    expect(self.page.locator(f'[name="{field}"]')).to_have_value(data[field])
+                expect(self.page).to_have_url(re.compile(r'/add/$'))
+                self.page.unroute('**/applications/import/')
+
     def test_job_import_lever_failure_then_manual_save(self):
         self.login_import_user()
         self.page.goto('/add/')

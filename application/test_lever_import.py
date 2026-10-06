@@ -191,13 +191,62 @@ class LeverAdapterTests(SimpleTestCase):
                 self.assertEqual(data['location'], geography)
 
     def test_structured_workplace_has_priority(self):
-        for workplace, expected in (('remote', 'remote'), ('hybrid', 'hybrid'), ('on-site', 'onsite')):
+        for workplace, expected in (('remote', 'remote'), ('hybrid', 'hybrid'), ('on-site', 'onsite'), ('onsite', 'onsite')):
             with self.subTest(workplace=workplace):
                 payload = job_payload()
                 payload['workplaceType'] = workplace
                 payload['categories']['location'] = 'Berlin, Germany'
                 payload['description'] = '<p>This is a remote position.</p>'
                 self.assertEqual(self.import_payload(payload)['data']['work_mode'], expected)
+
+    def test_burga_regressions_keep_structured_mode_and_monthly_salary(self):
+        payloads = json.loads((Path(settings.BASE_DIR) / 'tests/fixtures/lever_burga_postings.json').read_text(encoding='utf-8'))
+        for payload, location, mode, minimum, maximum in (
+            (payloads[0], 'Kaunas', 'onsite', '2800.00', '3300.00'),
+            (payloads[1], 'Vilnius', 'hybrid', '3000.00', '4000.00'),
+        ):
+            for workplace in ({'onsite', 'on-site'} if mode == 'onsite' else {'hybrid'}):
+                with self.subTest(title=payload['text'], workplace=workplace):
+                    payload['workplaceType'] = workplace
+                    url = f"https://jobs.lever.co/burga/{payload['id']}"
+                    html = f"<title>BURGA - {payload['text']}</title>"
+                    with patch.object(job_import, 'fetch_public_json', return_value=payload) as api:
+                        with patch.object(job_import, 'fetch_public_html', return_value=(html, url)):
+                            result = job_import.import_job_details(url)
+                    self.assertEqual(api.call_args.args, (f"https://api.lever.co/v0/postings/burga/{payload['id']}?mode=json",))
+                    self.assertEqual(result['data'], {
+                        'company': 'BURGA', 'job_title': payload['text'], 'location': location,
+                        'work_mode': mode, 'salary_min': minimum, 'salary_max': maximum,
+                        'currency': 'EUR', 'source': 'Lever', 'job_url': url,
+                    })
+                    self.assertIn('per month', ' '.join(result['warnings']))
+
+    def test_structured_workplace_never_uses_description_fallback(self):
+        for workplace, expected in (('on-site', 'onsite'), ('onsite', 'onsite'), ('hybrid', 'hybrid'), ('remote', 'remote')):
+            with self.subTest(workplace=workplace):
+                payload = dict(job_payload(), workplaceType=workplace)
+                payload['descriptionPlain'] = 'BENEFITS\nHybrid working model\nThis role is remote.'
+                with patch.object(lever, 'role_work_modes') as fallback:
+                    self.assertEqual(self.import_payload(payload)['data']['work_mode'], expected)
+                fallback.assert_not_called()
+
+    def test_unspecified_workplace_uses_only_explicit_role_statements(self):
+        for content, expected in (
+            ('This is a hybrid role.', 'hybrid'), ('Role is fully remote.', 'remote'),
+            ('This position is on-site.', 'onsite'), ('Workplace: Hybrid', 'hybrid'),
+            ('EXTRA SWEETENERS\nHybrid\nHybrid working is available.', None),
+            ('BENEFITS\nWe support flexible working and employees may work remotely.', None),
+            ('Flexible Working Arrangements: Embrace a hybrid work model.', None),
+            ('EXTRA SWEETENERS\nThis is a hybrid role.', 'hybrid'),
+        ):
+            with self.subTest(content=content):
+                payload = dict(job_payload(), workplaceType='unspecified', descriptionPlain=content)
+                payload['categories']['location'] = 'Vilnius'
+                self.assertEqual(self.import_payload(payload)['data'].get('work_mode'), expected)
+
+    def test_unknown_workplace_does_not_guess_from_text(self):
+        payload = dict(job_payload(), workplaceType='flexible', descriptionPlain='This is a hybrid role.')
+        self.assertNotIn('work_mode', self.import_payload(payload)['data'])
 
     def test_explicit_work_mode_content_and_ambiguous_wording(self):
         for content, expected in (
@@ -232,6 +281,67 @@ class LeverAdapterTests(SimpleTestCase):
         self.assertEqual(data['salary_min'], '120000.00')
         self.assertEqual(data['salary_max'], '140000.00')
         self.assertEqual(data['currency'], 'USD')
+
+    def test_structured_monthly_salary_keeps_original_units(self):
+        payload = dict(job_payload(), salaryRange={'min': 2800, 'max': 3300, 'currency': 'EUR', 'interval': 'per-month-salary'})
+        payload['descriptionPlain'] = 'SALARY: 4000 - 5000 EUR GROSS/month + BONUS'
+        result = self.import_payload(payload)
+        self.assertEqual(result['data']['salary_min'], '2800.00')
+        self.assertEqual(result['data']['salary_max'], '3300.00')
+        self.assertIn('per month', ' '.join(result['warnings']))
+
+    def test_salary_text_formats_periods_and_bonus_suffixes(self):
+        for text, minimum, maximum, currency, period in (
+            ('SALARY: 2800 - 3300 EUR/Month GROSS', '2800.00', '3300.00', 'EUR', 'month'),
+            ('SALARY: 3000 - 4000 EUR GROSS/month + BONUS', '3000.00', '4000.00', 'EUR', 'month'),
+            ('Salary: \u20ac3,000 - \u20ac4,000 per month', '3000.00', '4000.00', 'EUR', 'month'),
+            ('Pay range: $120,000 - $150,000', '120000.00', '150000.00', None, None),
+            ('Compensation: 50,000\u201360,000 GBP annually', '50000.00', '60000.00', 'GBP', 'year'),
+            ('\u20ac3500\u2013\u20ac5000 gross/month', '3500.00', '5000.00', 'EUR', 'month'),
+            ('EUR 3,500 - 5,000 gross per month', '3500.00', '5000.00', 'EUR', 'month'),
+            ('Salary: EUR 3 500 - 5 000 monthly', '3500.00', '5000.00', 'EUR', 'month'),
+            ('Salary: EUR 3\u00a0500 - 5\u00a0000 monthly', '3500.00', '5000.00', 'EUR', 'month'),
+            ('Salary: 50000 - 60000 GBP annual', '50000.00', '60000.00', 'GBP', 'year'),
+            ('Salary: 50000 - 60000 GBP per year', '50000.00', '60000.00', 'GBP', 'year'),
+            ('Salary: 3000 - 4000 EUR + BONUS 10%', '3000.00', '4000.00', 'EUR', None),
+            ('Salary: 3000 - 4000 EUR + BONUS 650 - 1000 EUR', '3000.00', '4000.00', 'EUR', None),
+        ):
+            with self.subTest(text=text):
+                payload = dict(job_payload(), salaryRange=None, descriptionPlain=text)
+                result = self.import_payload(payload)
+                self.assertEqual(result['data']['salary_min'], minimum)
+                self.assertEqual(result['data']['salary_max'], maximum)
+                self.assertEqual(result['data'].get('currency'), currency)
+                if period:
+                    self.assertIn(f'per {period}', ' '.join(result['warnings']))
+
+    def test_salary_uses_each_plaintext_field_without_html_masking(self):
+        for field in ('descriptionPlain', 'descriptionBodyPlain', 'additionalPlain', 'salaryDescriptionPlain'):
+            with self.subTest(field=field):
+                payload = dict(job_payload(), salaryRange=None, **{field: 'SALARY: 2800 - 3300 EUR/Month GROSS. Review before accepting.'})
+                result = self.import_payload(payload)
+                self.assertEqual(result['data']['salary_min'], '2800.00')
+                self.assertEqual(result['data']['salary_max'], '3300.00')
+
+    def test_salary_context_is_required_and_false_positives_are_ignored(self):
+        for text in (
+            '147 million revenue; 4 million customers; 12 million products; 650 EUR learning budget.',
+            'Learning budget: 650 - 1000 EUR per year',
+            'Learning budget\n\u20ac3500 - \u20ac5000 gross/month',
+            'Annual Learning & Development Budget\n\u20ac3500 - \u20ac5000 gross/month',
+            'BENEFITS\n\u20ac3500 - \u20ac5000 gross/month',
+            '2 - 5 years of experience and a 10 - 20% bonus.',
+            'Dates: 2025 - 2026; employees: 500 - 600.',
+            'Salary: EUR 3,50 - 4,500 per month',
+            'Salary: 5000 - 3000 EUR per month',
+            'Salary: 2800 - 3300 EUR/month. Salary: 3000 - 4000 EUR/month.',
+            'Salary: 2800 - 3300 EUR/month\nSalary: 3000 - 4000 EUR/month',
+        ):
+            with self.subTest(text=text):
+                payload = dict(job_payload(), salaryRange=None, descriptionPlain=text)
+                data = self.import_payload(payload)['data']
+                for field in ('salary_min', 'salary_max', 'currency'):
+                    self.assertNotIn(field, data)
 
     def test_labelled_salary_fallback_and_reliable_currency_only(self):
         for text, expected_currency, minimum, maximum in (
